@@ -1,7 +1,7 @@
 # egui-d3d11
 D3D11 backend for egui library. Presumably for mods/cheats development.
 Currently few features from egui are missing. WIP.
-## Works with the latest egui version - `0.17.0`
+## Latest supported egui version - `0.17.0`
 
 # Implemented features
 - [x] Text rendering
@@ -13,7 +13,7 @@ Currently few features from egui are missing. WIP.
 - [x] State storage
 - [x] Other image textures
 - [ ] Different cursor icons
-- [ ] Drag & Drop support
+- [ ] Files Drag & Drop support
 
 # Example DLL
 Example dll is contained in `example-wnd` folder. It uses either steam overlay hook or dxgi.
