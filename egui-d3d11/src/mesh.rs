@@ -1,4 +1,4 @@
-use egui::{epaint::Vertex, Mesh, Pos2, Rect, Rgba};
+use egui::{epaint::Vertex, Mesh, Pos2, Rect, Rgba, TextureId};
 use std::mem::size_of;
 use windows::Win32::Graphics::Direct3D11::{
     ID3D11Buffer, ID3D11Device, D3D11_BIND_INDEX_BUFFER, D3D11_BIND_VERTEX_BUFFER,
@@ -9,6 +9,7 @@ pub struct GpuMesh {
     pub indices: Vec<u32>,
     pub vertices: Vec<GpuVertex>,
     pub clip: Rect,
+    pub texture_id: TextureId,
 }
 
 impl GpuMesh {
@@ -30,6 +31,7 @@ impl GpuMesh {
                 .collect();
 
             Some(Self {
+                texture_id: mesh.texture_id,
                 indices: mesh.indices,
                 clip: scissors,
                 vertices,

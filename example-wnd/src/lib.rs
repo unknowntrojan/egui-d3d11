@@ -94,6 +94,7 @@ unsafe extern "stdcall" fn hk_wnd_proc(
     CallWindowProcW(OLD_WND_PROC.unwrap(), hwnd, msg, wparam, lparam)
 }
 
+static mut FRAME: i32 = 0;
 fn ui(ctx: &Context, i: &mut i32) {
     // You should not use statics like this, it's made
     // this way for the sake of example.
@@ -109,13 +110,12 @@ fn ui(ctx: &Context, i: &mut i32) {
     }
 
     let sc = ctx.input().screen_rect.max;
-
-    for (y, pt) in [(0., 8.), (20., 16.), (40., 24.), (60., 32.)] {
+    for i in 14..50 {
         ctx.debug_painter().text(
-            Pos2::new(0., y),
+            Pos2::new(0., (i - 14) as f32 * 10.),
             Align2::LEFT_TOP,
-            "My Text",
-            FontId::proportional(pt),
+            "АаБбВвГгДдЕеЁёЖжЗзИиЙйКкЛлМмНнОоПпРрСсТтУуФфХхЦцЧчШшЩщЪъЫыЬьЭэЮюЯя",
+            FontId::proportional(i as _),
             Color32::RED,
         );
     }
@@ -170,14 +170,14 @@ fn ui(ctx: &Context, i: &mut i32) {
     egui::Window::new("Image").show(ctx, |ui| {
         unsafe {
             // use `once_cell` crate instead of unsafe code!!!
-            static mut IMG: Option<TextureId> = None;
-            if IMG.is_none() {
-                let s =
-                    egui_extras::image::load_image_bytes(include_bytes!("../../logo.bmp")).unwrap();
-                IMG = Some(ctx.load_texture("logo", s).id());
-            }
+            // static mut IMG: Option<TextureId> = None;
+            // if IMG.is_none() {
+            //     let s =
+            //         egui_extras::image::load_image_bytes(include_bytes!("../../logo.bmp")).unwrap();
+            //     IMG = Some(ctx.load_texture("logo", s).id());
+            // }
 
-            ui.image(IMG.unwrap(), Vec2::new(256., 256.));
+            ui.image(TextureId::Managed(0), Vec2::new(1024., 32.));
         }
     });
 

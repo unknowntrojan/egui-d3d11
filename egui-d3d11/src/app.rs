@@ -11,9 +11,11 @@ use windows::{
                 ID3D11Device, ID3D11DeviceContext, ID3D11InputLayout, ID3D11RenderTargetView,
                 ID3D11Texture2D, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_BLEND_DESC,
                 D3D11_BLEND_INV_SRC_ALPHA, D3D11_BLEND_ONE, D3D11_BLEND_OP_ADD,
-                D3D11_BLEND_SRC_ALPHA, D3D11_COLOR_WRITE_ENABLE_ALL, D3D11_CULL_NONE,
-                D3D11_INPUT_ELEMENT_DESC, D3D11_INPUT_PER_VERTEX_DATA, D3D11_RASTERIZER_DESC,
-                D3D11_RENDER_TARGET_BLEND_DESC, D3D11_VIEWPORT,
+                D3D11_BLEND_SRC_ALPHA, D3D11_COLOR_WRITE_ENABLE_ALL, D3D11_COMPARISON_ALWAYS,
+                D3D11_CULL_NONE, D3D11_FILTER_MIN_MAG_MIP_LINEAR, D3D11_INPUT_ELEMENT_DESC,
+                D3D11_INPUT_PER_VERTEX_DATA, D3D11_RASTERIZER_DESC, D3D11_RENDER_TARGET_BLEND_DESC,
+                D3D11_SAMPLER_DESC, D3D11_TEXTURE_ADDRESS_BORDER,
+                D3D11_VIEWPORT,
             },
             Dxgi::{
                 Common::{
@@ -27,9 +29,11 @@ use windows::{
 };
 
 use crate::{
+    backup::BackupState,
     input::{InputCollector, InputResult},
     mesh::{create_index_buffer, create_vertex_buffer, GpuMesh, GpuVertex},
-    shader::CompiledShaders, backup::BackupState,
+    shader::CompiledShaders,
+    texture::TextureAllocator,
 };
 
 /// Heart and soul of this integration.
@@ -40,6 +44,7 @@ use crate::{
 pub struct DirectX11App<T = ()> {
     render_view: Mutex<Option<ID3D11RenderTargetView>>,
     ui: Box<dyn FnMut(&Context, &mut T) + 'static>,
+    tex_alloc: Mutex<TextureAllocator>,
     input_layout: ID3D11InputLayout,
     input_collector: InputCollector,
     shaders: CompiledShaders,
@@ -158,6 +163,7 @@ impl<T> DirectX11App<T> {
             }
 
             Self {
+                tex_alloc: Mutex::new(TextureAllocator::default()),
                 input_collector: InputCollector::new(hwnd),
                 ctx: Mutex::new(Context::default()),
                 backup: BackupState::default(),
@@ -182,6 +188,7 @@ impl<T> DirectX11App<T> {
             let view_lock = &*self.render_view.lock();
             let state_lock = &mut *self.state.lock();
             let ctx_lock = &mut *self.ctx.lock();
+            let tex_lock = &mut *self.tex_alloc.lock();
 
             let screen = self.get_screen_size();
 
@@ -195,6 +202,15 @@ impl<T> DirectX11App<T> {
                     ctx, state_lock,
                 )
             });
+
+            if !output.textures_delta.is_empty() {
+                tex_lock.process_deltas(dev, ctx, dbg!(output.textures_delta));
+            }
+
+            if output.shapes.is_empty() {
+                self.backup.restore(ctx);
+                return;
+            }
 
             if !output.platform_output.copied_text.is_empty() {
                 // @TODO: Paste text
@@ -214,6 +230,7 @@ impl<T> DirectX11App<T> {
 
             self.set_blend_state(dev, ctx);
             self.set_raster_options(dev, ctx);
+            self.set_sampler_state(dev, ctx);
 
             ctx.RSSetViewports(1, &self.get_viewport() as _);
             ctx.OMSetRenderTargets(1, view_lock, None);
@@ -224,6 +241,8 @@ impl<T> DirectX11App<T> {
                 let idx = create_index_buffer(dev, &mesh);
                 let vtx = create_vertex_buffer(dev, &mesh);
 
+                let texture = tex_lock.get_by_id(mesh.texture_id);
+
                 ctx.RSSetScissorRects(
                     1,
                     &RECT {
@@ -233,6 +252,10 @@ impl<T> DirectX11App<T> {
                         bottom: mesh.clip.bottom() as _,
                     },
                 );
+
+                if texture.is_some() {
+                    ctx.PSSetShaderResources(0, 1, &texture);
+                }
 
                 ctx.IASetVertexBuffers(0, 1, &Some(vtx), &(size_of::<GpuVertex>() as _), &0);
                 ctx.IASetIndexBuffer(idx, DXGI_FORMAT_R32_UINT, 0);
@@ -343,6 +366,7 @@ impl<T> DirectX11App<T> {
     fn set_raster_options(&self, dev: &ID3D11Device, ctx: &ID3D11DeviceContext) {
         let mut raster = None;
         let mut desc = D3D11_RASTERIZER_DESC::default();
+
         unsafe {
             ctx.RSGetState(&mut raster);
             raster.unwrap().GetDesc(&mut desc);
@@ -357,6 +381,26 @@ impl<T> DirectX11App<T> {
                 "Failed to create rasterizer state"
             );
             ctx.RSSetState(&options);
+        }
+    }
+
+    fn set_sampler_state(&self, dev: &ID3D11Device, ctx: &ID3D11DeviceContext) {
+        let desc = D3D11_SAMPLER_DESC {
+            Filter: D3D11_FILTER_MIN_MAG_MIP_LINEAR,
+            AddressU: D3D11_TEXTURE_ADDRESS_BORDER,
+            AddressV: D3D11_TEXTURE_ADDRESS_BORDER,
+            AddressW: D3D11_TEXTURE_ADDRESS_BORDER,
+            MipLODBias: 0.,
+            ComparisonFunc: D3D11_COMPARISON_ALWAYS,
+            MinLOD: 0.,
+            MaxLOD: 0.,
+            BorderColor: [1., 1., 1., 1.],
+            ..Default::default()
+        };
+
+        unsafe {
+            let sampler = expect!(dev.CreateSamplerState(&desc), "Failed to create sampler");
+            ctx.PSSetSamplers(0, 1, &Some(sampler));
         }
     }
 }

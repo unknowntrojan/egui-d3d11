@@ -19,6 +19,9 @@ vs_out vs_main(vs_in input) {
   return output;
 }
 
+sampler sampler0;
+Texture2D texture0;
+
 float4 ps_main(vs_out input) : SV_TARGET {
-  return pow(input.color, 1.0 / 2.4);
+  return pow(input.color, 1.0 / 2.2) * texture0.Sample(sampler0, input.uv);
 }
