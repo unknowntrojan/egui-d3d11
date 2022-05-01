@@ -1,6 +1,7 @@
 #![allow(warnings)]
 use egui::{
-    Color32, Context, Pos2, Rect, RichText, ScrollArea, Slider, Stroke, TextureId, Vec2, Widget,
+    Align2, Color32, Context, FontId, Pos2, Rect, RichText, ScrollArea, Slider, Stroke, TextureId,
+    Vec2, Widget,
 };
 use egui_d3d11::DirectX11App;
 use faithe::{internal::alloc_console, pattern::Pattern};
@@ -94,7 +95,7 @@ unsafe extern "stdcall" fn hk_wnd_proc(
 }
 
 fn ui(ctx: &Context, i: &mut i32) {
-    // You should not use statics like this, it made
+    // You should not use statics like this, it's made
     // this way for the sake of example.
     static mut UI_CHECK: bool = true;
     static mut TEXT: Option<String> = None;
@@ -109,10 +110,15 @@ fn ui(ctx: &Context, i: &mut i32) {
 
     let sc = ctx.input().screen_rect.max;
 
-    // ctx.tessellation_options().feathering = false;
-    // ctx.debug_painter().line_segment([Pos2::ZERO, sc], Stroke::new(35., Color32::RED));
-    // ctx.debug_painter().line_segment([Pos2::new(0., sc.y), Pos2::new(sc.x, 0.)], Stroke::new(35., Color32::RED));
-    // ctx.debug_painter().circle_filled(Pos2::new(sc.x / 2., sc.y / 2.), 50., Color32::WHITE);
+    for (y, pt) in [(0., 8.), (20., 16.), (40., 24.), (60., 32.)] {
+        ctx.debug_painter().text(
+            Pos2::new(0., y),
+            Align2::LEFT_TOP,
+            "My Text",
+            FontId::proportional(pt),
+            Color32::RED,
+        );
+    }
 
     egui::containers::Window::new("Main menu").show(ctx, |ui| {
         ui.label(RichText::new("Test").color(Color32::BLACK));
@@ -171,7 +177,7 @@ fn ui(ctx: &Context, i: &mut i32) {
                 IMG = Some(ctx.load_texture("logo", s).id());
             }
 
-            ui.image(IMG.unwrap(), Vec2::new(512., 512.));
+            ui.image(IMG.unwrap(), Vec2::new(256., 256.));
         }
     });
 

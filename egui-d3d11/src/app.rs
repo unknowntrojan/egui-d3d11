@@ -1,7 +1,4 @@
-use egui::{
-    epaint::Primitive,
-    Context,
-};
+use egui::{epaint::Primitive, Context};
 use parking_lot::{Mutex, MutexGuard};
 use std::mem::size_of;
 use windows::{
@@ -32,7 +29,7 @@ use windows::{
 use crate::{
     input::{InputCollector, InputResult},
     mesh::{create_index_buffer, create_vertex_buffer, GpuMesh, GpuVertex},
-    shader::CompiledShaders,
+    shader::CompiledShaders, backup::BackupState,
 };
 
 /// Heart and soul of this integration.
@@ -47,6 +44,7 @@ pub struct DirectX11App<T = ()> {
     input_collector: InputCollector,
     shaders: CompiledShaders,
     ctx: Mutex<Context>,
+    backup: BackupState,
     state: Mutex<T>,
     hwnd: HWND,
 }
@@ -162,6 +160,7 @@ impl<T> DirectX11App<T> {
             Self {
                 input_collector: InputCollector::new(hwnd),
                 ctx: Mutex::new(Context::default()),
+                backup: BackupState::default(),
                 state: Mutex::new(state),
                 ui: Box::new(ui),
                 input_layout,
@@ -177,6 +176,8 @@ impl<T> DirectX11App<T> {
     pub fn present(&self, swap_chain: &IDXGISwapChain, _sync_interval: u32, _flags: u32) {
         unsafe {
             let (dev, ctx) = &get_device_and_context(swap_chain);
+
+            self.backup.save(ctx);
 
             let view_lock = &*self.render_view.lock();
             let state_lock = &mut *self.state.lock();
@@ -211,21 +212,6 @@ impl<T> DirectX11App<T> {
                 })
                 .collect::<Vec<_>>();
 
-            /*
-            D3D11_BLEND_DESC desc;
-            ZeroMemory(&desc, sizeof(desc));
-            desc.AlphaToCoverageEnable = false;
-            desc.RenderTarget[0].BlendEnable = true;
-            desc.RenderTarget[0].SrcBlend = D3D11_BLEND_SRC_ALPHA;
-            desc.RenderTarget[0].DestBlend = D3D11_BLEND_INV_SRC_ALPHA;
-            desc.RenderTarget[0].BlendOp = D3D11_BLEND_OP_ADD;
-            desc.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_ONE;
-            desc.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_INV_SRC_ALPHA;
-            desc.RenderTarget[0].BlendOpAlpha = D3D11_BLEND_OP_ADD;
-            desc.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
-            g_pd3dDevice->CreateBlendState(&desc, &g_pBlendState);
-            */
-
             self.set_blend_state(dev, ctx);
             self.set_raster_options(dev, ctx);
 
@@ -255,6 +241,8 @@ impl<T> DirectX11App<T> {
 
                 ctx.DrawIndexed(mesh.indices.len() as _, 0, 0);
             }
+
+            self.backup.restore(ctx);
         }
     }
 
