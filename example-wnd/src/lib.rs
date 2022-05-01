@@ -1,11 +1,14 @@
 #![allow(warnings)]
 use egui::{
-    Align2, Color32, Context, FontId, Pos2, Rect, RichText, ScrollArea, Slider, Stroke, TextureId,
-    Vec2, Widget,
+    Align2, Color32, Context, FontData, FontDefinitions, FontFamily, FontId, FontTweak, Pos2, Rect,
+    RichText, ScrollArea, Slider, Stroke, TextureId, Vec2, Widget,
 };
 use egui_d3d11::DirectX11App;
 use faithe::{internal::alloc_console, pattern::Pattern};
-use std::intrinsics::transmute;
+use std::{
+    intrinsics::transmute,
+    sync::{Arc, Once},
+};
 use windows::{
     core::HRESULT,
     Win32::{
@@ -96,107 +99,126 @@ unsafe extern "stdcall" fn hk_wnd_proc(
 
 static mut FRAME: i32 = 0;
 fn ui(ctx: &Context, i: &mut i32) {
-    // You should not use statics like this, it's made
-    // this way for the sake of example.
-    static mut UI_CHECK: bool = true;
-    static mut TEXT: Option<String> = None;
-    static mut VALUE: f32 = 0.;
-    static mut COLOR: [f32; 3] = [0., 0., 0.];
-
     unsafe {
+        // You should not use statics like this, it's made
+        // this way for the sake of example.
+        static mut UI_CHECK: bool = true;
+        static mut TEXT: Option<String> = None;
+        static mut VALUE: f32 = 0.;
+        static mut COLOR: [f32; 3] = [0., 0., 0.];
+        static ONCE: Once = Once::new();
+
+        ONCE.call_once(|| {
+            // Uncomment this to set other fonts.
+            // let mut fonts = FontDefinitions::default();
+            // let mut tweak = FontTweak::default();
+            // fonts.font_data.insert(
+            //     "my_font".to_owned(),
+            //     FontData::from_static(include_bytes!("Lobster-Regular.ttf")).tweak(tweak),
+            // );
+            // fonts
+            //     .families
+            //     .get_mut(&FontFamily::Proportional)
+            //     .unwrap()
+            //     .insert(0, "my_font".to_owned());
+            // fonts
+            //     .families
+            //     .get_mut(&FontFamily::Monospace)
+            //     .unwrap()
+            //     .push("my_font".to_owned());
+            // ctx.set_fonts(fonts);
+        });
+
         if TEXT.is_none() {
             TEXT = Some(String::from("Test"));
         }
-    }
 
-    let sc = ctx.input().screen_rect.max;
-    for i in 14..50 {
         ctx.debug_painter().text(
-            Pos2::new(0., (i - 14) as f32 * 10.),
+            Pos2::new(0., 0.),
             Align2::LEFT_TOP,
-            "АаБбВвГгДдЕеЁёЖжЗзИиЙйКкЛлМмНнОоПпРрСсТтУуФфХхЦцЧчШшЩщЪъЫыЬьЭэЮюЯя",
-            FontId::proportional(i as _),
+            "Bruh",
+            FontId::default(),
             Color32::RED,
         );
+
+        egui::containers::Window::new("Main menu").show(ctx, |ui| {
+            ui.label(RichText::new("Test").color(Color32::BLACK));
+            ui.label(RichText::new("Other").color(Color32::WHITE));
+            ui.separator();
+
+            ui.label(RichText::new(format!("I: {}", *i)).color(Color32::LIGHT_RED));
+
+            unsafe {
+                ui.checkbox(&mut UI_CHECK, "Some checkbox");
+                ui.text_edit_singleline(TEXT.as_mut().unwrap());
+                ScrollArea::vertical().max_height(200.).show(ui, |ui| {
+                    for i in 1..=100 {
+                        ui.label(format!("Label: {}", i));
+                    }
+                });
+
+                Slider::new(&mut VALUE, -1.0..=1.0).ui(ui);
+
+                ui.color_edit_button_rgb(&mut COLOR);
+            }
+
+            fn example_plot(ui: &mut egui::Ui) -> egui::Response {
+                use egui::plot::{Line, Value, Values};
+                let n = 128;
+                let line = Line::new(Values::from_values_iter((0..=n).map(|i| {
+                    use std::f64::consts::TAU;
+                    let x = egui::remap(i as f64, 0.0..=n as f64, -TAU..=TAU);
+                    Value::new(x, x.sin())
+                })));
+                egui::plot::Plot::new("example_plot")
+                    .height(64.0)
+                    .data_aspect(1.0)
+                    .show(ui, |plot_ui| plot_ui.line(line))
+                    .response
+            }
+
+            example_plot(ui);
+
+            ui.label(format!(
+                "{:?}",
+                &ui.input().pointer.button_down(egui::PointerButton::Primary)
+            ));
+            if ui.button("You can't click me yet").clicked() {
+                *i += 1;
+            }
+        });
+
+        egui::Window::new("Image").show(ctx, |ui| {
+            unsafe {
+                // use `once_cell` crate instead of unsafe code!!!
+                // static mut IMG: Option<TextureId> = None;
+                // if IMG.is_none() {
+                //     let s =
+                //         egui_extras::image::load_image_bytes(include_bytes!("../../logo.bmp")).unwrap();
+                //     IMG = Some(ctx.load_texture("logo", s).id());
+                // }
+
+                ui.image(TextureId::Managed(0), Vec2::new(1024., 32.));
+            }
+        });
+
+        ctx.debug_painter().rect(
+            Rect {
+                min: Pos2::new(200.0, 200.0),
+                max: Pos2::new(250.0, 250.0),
+            },
+            10.0,
+            Color32::from_rgba_premultiplied(255, 0, 0, 150),
+            Stroke::none(),
+        );
+
+        ctx.debug_painter().circle(
+            Pos2::new(350.0, 350.0),
+            35.0,
+            Color32::from_rgba_premultiplied(0, 255, 0, 200),
+            Stroke::none(),
+        );
     }
-
-    egui::containers::Window::new("Main menu").show(ctx, |ui| {
-        ui.label(RichText::new("Test").color(Color32::BLACK));
-        ui.label(RichText::new("Other").color(Color32::WHITE));
-        ui.separator();
-
-        ui.label(RichText::new(format!("I: {}", *i)).color(Color32::LIGHT_RED));
-
-        unsafe {
-            ui.checkbox(&mut UI_CHECK, "Some checkbox");
-            ui.text_edit_singleline(TEXT.as_mut().unwrap());
-            ScrollArea::vertical().max_height(200.).show(ui, |ui| {
-                for i in 1..=100 {
-                    ui.label(format!("Label: {}", i));
-                }
-            });
-
-            Slider::new(&mut VALUE, -1.0..=1.0).ui(ui);
-
-            ui.color_edit_button_rgb(&mut COLOR);
-        }
-
-        fn example_plot(ui: &mut egui::Ui) -> egui::Response {
-            use egui::plot::{Line, Value, Values};
-            let n = 128;
-            let line = Line::new(Values::from_values_iter((0..=n).map(|i| {
-                use std::f64::consts::TAU;
-                let x = egui::remap(i as f64, 0.0..=n as f64, -TAU..=TAU);
-                Value::new(x, x.sin())
-            })));
-            egui::plot::Plot::new("example_plot")
-                .height(64.0)
-                .data_aspect(1.0)
-                .show(ui, |plot_ui| plot_ui.line(line))
-                .response
-        }
-
-        example_plot(ui);
-
-        ui.label(format!(
-            "{:?}",
-            &ui.input().pointer.button_down(egui::PointerButton::Primary)
-        ));
-        if ui.button("You can't click me yet").clicked() {
-            *i += 1;
-        }
-    });
-
-    egui::Window::new("Image").show(ctx, |ui| {
-        unsafe {
-            // use `once_cell` crate instead of unsafe code!!!
-            // static mut IMG: Option<TextureId> = None;
-            // if IMG.is_none() {
-            //     let s =
-            //         egui_extras::image::load_image_bytes(include_bytes!("../../logo.bmp")).unwrap();
-            //     IMG = Some(ctx.load_texture("logo", s).id());
-            // }
-
-            ui.image(TextureId::Managed(0), Vec2::new(1024., 32.));
-        }
-    });
-
-    ctx.debug_painter().rect(
-        Rect {
-            min: Pos2::new(200.0, 200.0),
-            max: Pos2::new(300.0, 300.0),
-        },
-        10.0,
-        Color32::from_rgba_premultiplied(255, 0, 0, 150),
-        Stroke::none(),
-    );
-
-    ctx.debug_painter().circle(
-        Pos2::new(350.0, 350.0),
-        75.0,
-        Color32::from_rgba_premultiplied(0, 255, 0, 200),
-        Stroke::none(),
-    );
 }
 
 unsafe fn main_thread(_hinst: usize) {

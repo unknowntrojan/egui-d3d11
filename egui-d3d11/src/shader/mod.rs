@@ -72,19 +72,15 @@ impl ShaderData {
     pub fn as_ptr(&self) -> *mut () {
         match self {
             ShaderData::EmbeddedData(arr) => (*arr).as_ptr() as _,
-            ShaderData::CompiledBlob(b) => unsafe {
-                b.GetBufferPointer() as _
-            },
+            ShaderData::CompiledBlob(b) => unsafe { b.GetBufferPointer() as _ },
         }
     }
-    
+
     #[inline]
     pub fn len(&self) -> usize {
         match self {
             ShaderData::EmbeddedData(arr) => (*arr).len(),
-            ShaderData::CompiledBlob(b) => unsafe {
-                b.GetBufferSize()
-            },
+            ShaderData::CompiledBlob(b) => unsafe { b.GetBufferSize() },
         }
     }
 }
@@ -114,7 +110,7 @@ impl CompiledShaders {
                             vcache.GetBufferSize(),
                         ))
                         .unwrap();
-                        
+
                     std::fs::OpenOptions::new()
                         .write(true)
                         .read(true)
@@ -138,12 +134,15 @@ impl CompiledShaders {
             unsafe {
                 let cache = ShaderData::EmbeddedData(include_bytes!("vertex.bin"));
                 let vertex = ID3D11VertexShader::create_shader(device, &cache);
-                let pixel = ID3D11PixelShader::create_shader(device, &ShaderData::EmbeddedData(include_bytes!("pixel.bin")));
+                let pixel = ID3D11PixelShader::create_shader(
+                    device,
+                    &ShaderData::EmbeddedData(include_bytes!("pixel.bin")),
+                );
 
                 Self {
                     cache,
                     vertex,
-                    pixel
+                    pixel,
                 }
             }
         }

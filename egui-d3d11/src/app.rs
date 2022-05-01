@@ -12,9 +12,10 @@ use windows::{
                 ID3D11Texture2D, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_BLEND_DESC,
                 D3D11_BLEND_INV_SRC_ALPHA, D3D11_BLEND_ONE, D3D11_BLEND_OP_ADD,
                 D3D11_BLEND_SRC_ALPHA, D3D11_COLOR_WRITE_ENABLE_ALL, D3D11_COMPARISON_ALWAYS,
-                D3D11_CULL_NONE, D3D11_FILTER_MIN_MAG_MIP_LINEAR, D3D11_INPUT_ELEMENT_DESC,
-                D3D11_INPUT_PER_VERTEX_DATA, D3D11_RASTERIZER_DESC, D3D11_RENDER_TARGET_BLEND_DESC,
-                D3D11_SAMPLER_DESC, D3D11_TEXTURE_ADDRESS_BORDER, D3D11_VIEWPORT,
+                D3D11_CULL_NONE, D3D11_FILL_SOLID, D3D11_FILTER_MIN_MAG_MIP_LINEAR,
+                D3D11_INPUT_ELEMENT_DESC, D3D11_INPUT_PER_VERTEX_DATA, D3D11_RASTERIZER_DESC,
+                D3D11_RENDER_TARGET_BLEND_DESC, D3D11_SAMPLER_DESC, D3D11_TEXTURE_ADDRESS_BORDER,
+                D3D11_VIEWPORT,
             },
             Dxgi::{
                 Common::{
@@ -157,10 +158,6 @@ impl<T> DirectX11App<T> {
                 "Failed to create input layout"
             );
 
-            if cfg!(debug_assertions) {
-                eprintln!("Initialization finished");
-            }
-
             Self {
                 tex_alloc: Mutex::new(TextureAllocator::default()),
                 input_collector: InputCollector::new(hwnd),
@@ -203,12 +200,7 @@ impl<T> DirectX11App<T> {
             });
 
             if !output.textures_delta.is_empty() {
-                tex_lock.process_deltas(dev, ctx, output.textures_delta);
-            }
-
-            if output.shapes.is_empty() {
-                self.backup.restore(ctx);
-                return;
+                tex_lock.process_deltas(dev, ctx, dbg!(output.textures_delta));
             }
 
             if !output.platform_output.copied_text.is_empty() {
@@ -363,20 +355,22 @@ impl<T> DirectX11App<T> {
     }
 
     fn set_raster_options(&self, dev: &ID3D11Device, ctx: &ID3D11DeviceContext) {
-        let mut raster = None;
-        let mut desc = D3D11_RASTERIZER_DESC::default();
-
-        unsafe {
-            ctx.RSGetState(&mut raster);
-            raster.unwrap().GetDesc(&mut desc);
-        }
-
-        desc.CullMode = D3D11_CULL_NONE;
-        desc.ScissorEnable = true.into();
+        let raster_desc = D3D11_RASTERIZER_DESC {
+            FillMode: D3D11_FILL_SOLID,
+            CullMode: D3D11_CULL_NONE,
+            FrontCounterClockwise: false.into(),
+            DepthBias: false.into(),
+            DepthBiasClamp: 0.,
+            SlopeScaledDepthBias: 0.,
+            DepthClipEnable: false.into(),
+            ScissorEnable: true.into(),
+            MultisampleEnable: false.into(),
+            AntialiasedLineEnable: false.into(),
+        };
 
         unsafe {
             let options = expect!(
-                dev.CreateRasterizerState(&desc),
+                dev.CreateRasterizerState(&raster_desc),
                 "Failed to create rasterizer state"
             );
             ctx.RSSetState(&options);

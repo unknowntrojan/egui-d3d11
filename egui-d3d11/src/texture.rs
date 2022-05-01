@@ -49,14 +49,9 @@ impl TextureAllocator {
 }
 
 impl TextureAllocator {
-    fn allocate_new(&mut self, dev: &ID3D11Device, tid: TextureId, image: ImageData) -> bool {
-        if self.allocated.contains_key(&tid) {
-            false
-        } else {
-            let tex = Self::allocate_texture(dev, image);
-            self.allocated.insert(tid, tex);
-            true
-        }
+    fn allocate_new(&mut self, dev: &ID3D11Device, tid: TextureId, image: ImageData) {
+        let tex = Self::allocate_texture(dev, image);
+        self.allocated.insert(tid, tex);
     }
 
     fn free(&mut self, tid: TextureId) -> bool {
