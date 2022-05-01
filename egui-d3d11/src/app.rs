@@ -1,6 +1,9 @@
-use egui::{epaint::Primitive, Context};
+use egui::{
+    epaint::{Primitive, Vertex},
+    Context,
+};
 use parking_lot::{Mutex, MutexGuard};
-use std::mem::{size_of, size_of_val};
+use std::{mem::size_of, arch::asm};
 use windows::{
     core::HRESULT,
     Win32::{
@@ -9,11 +12,13 @@ use windows::{
             Direct3D::D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
             Direct3D11::{
                 ID3D11Device, ID3D11DeviceContext, ID3D11InputLayout, ID3D11RenderTargetView,
-                ID3D11Texture2D, D3D11_BIND_VERTEX_BUFFER, D3D11_BUFFER_DESC,
-                D3D11_INPUT_ELEMENT_DESC, D3D11_INPUT_PER_VERTEX_DATA, D3D11_SUBRESOURCE_DATA,
-                D3D11_USAGE_DEFAULT, D3D11_VIEWPORT,
+                ID3D11Texture2D, D3D11_INPUT_ELEMENT_DESC, D3D11_INPUT_PER_VERTEX_DATA,
+                D3D11_VIEWPORT, D3D11_APPEND_ALIGNED_ELEMENT,
             },
-            Dxgi::{Common::DXGI_FORMAT_R32G32B32_FLOAT, IDXGISwapChain},
+            Dxgi::{
+                Common::{DXGI_FORMAT_R32G32_FLOAT, DXGI_FORMAT_R8G8B8A8_UINT, DXGI_FORMAT_R32_UINT, DXGI_FORMAT_R8G8B8A8_UNORM},
+                IDXGISwapChain,
+            },
         },
         UI::WindowsAndMessaging::GetClientRect,
     },
@@ -21,7 +26,7 @@ use windows::{
 
 use crate::{
     input::{InputCollector, InputResult},
-    mesh::{create_index_buffer, create_vertex_buffer},
+    mesh::{create_index_buffer, create_vertex_buffer, normalize_mesh},
     shader::CompiledShaders,
 };
 
@@ -56,34 +61,34 @@ where
 }
 
 impl<T> DirectX11App<T> {
-    const INPUT_ELEMENTS_DESC: [D3D11_INPUT_ELEMENT_DESC; 1] = [
+    const INPUT_ELEMENTS_DESC: [D3D11_INPUT_ELEMENT_DESC; 3] = [
         D3D11_INPUT_ELEMENT_DESC {
-            SemanticName: p_str!("POS"),
+            SemanticName: p_str!("POSITION"),
             SemanticIndex: 0,
-            Format: DXGI_FORMAT_R32G32B32_FLOAT,
+            Format: DXGI_FORMAT_R32G32_FLOAT,
             InputSlot: 0,
             AlignedByteOffset: 0,
             InputSlotClass: D3D11_INPUT_PER_VERTEX_DATA,
             InstanceDataStepRate: 0,
         },
-        // D3D11_INPUT_ELEMENT_DESC {
-        // SemanticName: pc_str!("TEXCOORD"),
-        // SemanticIndex: 0,
-        // Format: DXGI_FORMAT_R32G32_FLOAT,
-        // InputSlot: 0,
-        // AlignedByteOffset: D3D11_APPEND_ALIGNED_ELEMENT,
-        // InputSlotClass: D3D11_INPUT_PER_VERTEX_DATA,
-        // InstanceDataStepRate: 0,
-        // },
-        // D3D11_INPUT_ELEMENT_DESC {
-        // SemanticName: pc_str!("COLOR"),
-        // SemanticIndex: 0,
-        // Format: DXGI_FORMAT_R8G8B8A8_UINT,
-        // InputSlot: 0,
-        // AlignedByteOffset: D3D11_APPEND_ALIGNED_ELEMENT,
-        // InputSlotClass: D3D11_INPUT_PER_VERTEX_DATA,
-        // InstanceDataStepRate: 0,
-        // },
+        D3D11_INPUT_ELEMENT_DESC {
+            SemanticName: p_str!("TEXCOORD"),
+            SemanticIndex: 0,
+            Format: DXGI_FORMAT_R32G32_FLOAT,
+            InputSlot: 0,
+            AlignedByteOffset: D3D11_APPEND_ALIGNED_ELEMENT,
+            InputSlotClass: D3D11_INPUT_PER_VERTEX_DATA,
+            InstanceDataStepRate: 0,
+        },
+        D3D11_INPUT_ELEMENT_DESC {
+            SemanticName: p_str!("COLOR"),
+            SemanticIndex: 0,
+            Format: DXGI_FORMAT_R8G8B8A8_UNORM,
+            InputSlot: 0,
+            AlignedByteOffset: D3D11_APPEND_ALIGNED_ELEMENT,
+            InputSlotClass: D3D11_INPUT_PER_VERTEX_DATA,
+            InstanceDataStepRate: 0,
+        },
     ];
 }
 
@@ -164,14 +169,18 @@ impl<T> DirectX11App<T> {
 
     /// Present call. Should be called once per original present call, before or inside of hook.
     pub fn present(&self, swap_chain: &IDXGISwapChain, _sync_interval: u32, _flags: u32) {
-        const TRIANGLE: [f32; 9] = [0.0, 0.5, 0.0, 0.5, -0.5, 0.0, -0.5, -0.5, 0.0];
-
         unsafe {
-            let (dev, context) = &get_device_and_context(swap_chain);
+            let (dev, ctx) = &get_device_and_context(swap_chain);
 
             let view_lock = &*self.render_view.lock();
             let state_lock = &mut *self.state.lock();
             let ctx_lock = &mut *self.ctx.lock();
+
+            let screen = self.get_screen_size();
+
+            if cfg!(feature = "clear") {
+                ctx.ClearRenderTargetView(view_lock, [0.39, 0.58, 0.92, 1.].as_ptr());
+            }
 
             let output = ctx_lock.run(self.input_collector.collect_input(), |ctx| {
                 // Dont look here, it should be fine until someone tries to do something horrible.
@@ -188,7 +197,8 @@ impl<T> DirectX11App<T> {
                 .tessellate(output.shapes)
                 .into_iter()
                 .filter_map(|prim| {
-                    if let Primitive::Mesh(mesh) = prim.primitive {
+                    if let Primitive::Mesh(mut mesh) = prim.primitive {
+                        normalize_mesh(screen, &mut mesh);
                         Some((prim.clip_rect, mesh))
                     } else {
                         panic!("Paint callbacks are not yet supported")
@@ -196,42 +206,23 @@ impl<T> DirectX11App<T> {
                 })
                 .collect::<Vec<_>>();
 
-            for (clip, mesh) in primitives {
+            ctx.RSSetViewports(1, &self.get_viewport() as _);
+            ctx.OMSetRenderTargets(1, view_lock, None);
+            ctx.IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+            ctx.IASetInputLayout(&self.input_layout);
+
+            for (_, mesh) in primitives {
                 let index_buffer = create_index_buffer(dev, &mesh);
                 let vertex_buffer = create_vertex_buffer(dev, &mesh);
+
+                ctx.IASetVertexBuffers(0, 1, &Some(vertex_buffer), &(size_of::<Vertex>() as _), &0);
+                ctx.IASetIndexBuffer(index_buffer, DXGI_FORMAT_R32_UINT, 0);
+                ctx.VSSetShader(&self.shaders.vertex, &None, 0);
+                ctx.PSSetShader(&self.shaders.pixel, &None, 0);
+
+                ctx.DrawIndexed(mesh.indices.len() as _, 0, 0);
+                println!("Draw call");
             }
-
-            let desc = D3D11_BUFFER_DESC {
-                ByteWidth: size_of_val(&TRIANGLE) as _,
-                Usage: D3D11_USAGE_DEFAULT,
-                BindFlags: D3D11_BIND_VERTEX_BUFFER.0,
-                CPUAccessFlags: 0,
-                MiscFlags: 0,
-                StructureByteStride: 0,
-            };
-
-            let data = D3D11_SUBRESOURCE_DATA {
-                pSysMem: TRIANGLE.as_ptr() as _,
-                SysMemPitch: (3 * size_of::<f32>()) as _,
-                SysMemSlicePitch: 0,
-            };
-
-            let buf = expect!(dev.CreateBuffer(&desc, &data), "Failed to create buffer");
-            if cfg!(feature = "clear") {
-                context.ClearRenderTargetView(view_lock, [0.39, 0.58, 0.92, 1.].as_ptr());
-            }
-            context.RSSetViewports(1, &self.get_viewport() as _);
-            context.OMSetRenderTargets(1, view_lock, None);
-
-            context.IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-            context.IASetInputLayout(&self.input_layout);
-
-            let strides = (3 * size_of::<f32>()) as u32;
-            let offsets = 0u32;
-            context.IASetVertexBuffers(0, 1, &Some(buf), &strides as _, &offsets);
-            context.VSSetShader(&self.shaders.vertex, &None, 0);
-            context.PSSetShader(&self.shaders.pixel, &None, 0);
-            context.Draw(3, 0);
         }
     }
 

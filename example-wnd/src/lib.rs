@@ -1,3 +1,4 @@
+#![allow(warnings)]
 use egui::{
     Color32, Context, Pos2, Rect, RichText, ScrollArea, Slider, Stroke, TextureId, Vec2, Widget,
 };
@@ -105,6 +106,15 @@ fn ui(ctx: &Context, i: &mut i32) {
             TEXT = Some(String::from("Test"));
         }
     }
+
+    let sc = ctx.input().screen_rect.max;
+
+    ctx.tessellation_options().feathering = false;
+    ctx.debug_painter().line_segment([Pos2::ZERO, sc], Stroke::new(35., Color32::RED));
+    ctx.debug_painter().line_segment([Pos2::new(0., sc.y), Pos2::new(sc.x, 0.)], Stroke::new(35., Color32::RED));
+    ctx.debug_painter().circle_filled(Pos2::new(sc.x / 2., sc.y / 2.), 50., Color32::WHITE);
+
+    return;
 
     egui::containers::Window::new("Main menu").show(ctx, |ui| {
         ui.label(RichText::new("Test").color(Color32::BLACK));
