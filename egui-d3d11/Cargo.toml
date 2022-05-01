@@ -1,6 +1,6 @@
 [package]
 name = "egui-d3d11"
-version = "0.5.1"
+version = "0.6.0"
 edition = "2021"
 authors = ["sy1ntexx"]
 description = "D3D11 backend for egui library."
@@ -14,7 +14,7 @@ targets = ["i686-pc-windows-msvc", "x86_64-pc-windows-msvc"]
 [dependencies]
 parking_lot = "0.11.2"
 thiserror = "1.0.0"
-egui = "0.18"
+egui = "0.18.1"
 
 [features]
 no-msgs = []
