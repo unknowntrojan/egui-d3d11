@@ -1,10 +1,10 @@
 use egui::{epaint::Primitive, Context};
 use parking_lot::{Mutex, MutexGuard};
-use std::mem::size_of;
+use std::{intrinsics::copy_nonoverlapping, mem::size_of};
 use windows::{
     core::HRESULT,
     Win32::{
-        Foundation::{HWND, LPARAM, RECT, WPARAM},
+        Foundation::{HANDLE, HWND, LPARAM, RECT, WPARAM},
         Graphics::{
             Direct3D::D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
             Direct3D11::{
@@ -23,6 +23,11 @@ use windows::{
                 },
                 IDXGISwapChain,
             },
+        },
+        System::{
+            DataExchange::{CloseClipboard, EmptyClipboard, OpenClipboard, SetClipboardData},
+            Memory::{GlobalAlloc, GlobalFree, GlobalLock, GlobalUnlock, GMEM_MOVEABLE},
+            SystemServices::CF_UNICODETEXT,
         },
         UI::WindowsAndMessaging::GetClientRect,
     },
@@ -204,7 +209,31 @@ impl<T> DirectX11App<T> {
             }
 
             if !output.platform_output.copied_text.is_empty() {
-                // @TODO: Paste text
+                let text_utf16: Vec<u16> = format!("{}\x00", &output.platform_output.copied_text)
+                    .encode_utf16()
+                    .collect();
+
+                let hglob =
+                    GlobalAlloc(GMEM_MOVEABLE, text_utf16.len() * std::mem::size_of::<u16>());
+                let dst = GlobalLock(hglob);
+                copy_nonoverlapping(text_utf16.as_ptr(), dst as _, text_utf16.len());
+                GlobalUnlock(hglob);
+                OpenClipboard(swap_chain.GetDesc().unwrap().OutputWindow);
+                EmptyClipboard();
+                SetClipboardData(CF_UNICODETEXT.0, HANDLE(hglob));
+                GlobalFree(hglob);
+                CloseClipboard();
+
+                // Lmao please stop
+                let hglob =
+                    GlobalAlloc(GMEM_MOVEABLE, text_utf16.len() * std::mem::size_of::<u16>());
+                let dst = GlobalLock(hglob);
+                copy_nonoverlapping(text_utf16.as_ptr(), dst as _, text_utf16.len());
+                GlobalUnlock(hglob);
+                OpenClipboard(HWND::default());
+                SetClipboardData(CF_UNICODETEXT.0, HANDLE(hglob));
+                GlobalFree(hglob);
+                CloseClipboard();
             }
 
             if output.shapes.is_empty() {
