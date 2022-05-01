@@ -204,7 +204,7 @@ impl<T> DirectX11App<T> {
             });
 
             if !output.textures_delta.is_empty() {
-                tex_lock.process_deltas(dev, ctx, dbg!(output.textures_delta));
+                tex_lock.process_deltas(dev, ctx, output.textures_delta);
             }
 
             if output.shapes.is_empty() {
