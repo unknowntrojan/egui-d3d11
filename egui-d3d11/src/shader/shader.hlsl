@@ -20,5 +20,5 @@ vs_out vs_main(vs_in input) {
 }
 
 float4 ps_main(vs_out input) : SV_TARGET {
-  return pow(input.color, 1.0 / 2.2);
+  return pow(input.color, 1.0 / 2.4);
 }

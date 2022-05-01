@@ -1,5 +1,5 @@
 use egui::{
-    epaint::{Primitive, Vertex},
+    epaint::Primitive,
     Context,
 };
 use parking_lot::{Mutex, MutexGuard};
@@ -16,12 +16,11 @@ use windows::{
                 D3D11_BLEND_INV_SRC_ALPHA, D3D11_BLEND_ONE, D3D11_BLEND_OP_ADD,
                 D3D11_BLEND_SRC_ALPHA, D3D11_COLOR_WRITE_ENABLE_ALL, D3D11_CULL_NONE,
                 D3D11_INPUT_ELEMENT_DESC, D3D11_INPUT_PER_VERTEX_DATA, D3D11_RASTERIZER_DESC,
-                D3D11_RASTERIZER_DESC2, D3D11_RENDER_TARGET_BLEND_DESC, D3D11_VIEWPORT,
+                D3D11_RENDER_TARGET_BLEND_DESC, D3D11_VIEWPORT,
             },
             Dxgi::{
                 Common::{
                     DXGI_FORMAT_R32G32B32A32_FLOAT, DXGI_FORMAT_R32G32_FLOAT, DXGI_FORMAT_R32_UINT,
-                    DXGI_FORMAT_R8G8B8A8_UINT,
                 },
                 IDXGISwapChain,
             },
@@ -174,6 +173,7 @@ impl<T> DirectX11App<T> {
     }
 
     /// Present call. Should be called once per original present call, before or inside of hook.
+    #[allow(clippy::cast_ref_to_mut)]
     pub fn present(&self, swap_chain: &IDXGISwapChain, _sync_interval: u32, _flags: u32) {
         unsafe {
             let (dev, ctx) = &get_device_and_context(swap_chain);

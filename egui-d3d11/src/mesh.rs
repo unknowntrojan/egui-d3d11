@@ -31,8 +31,8 @@ impl GpuMesh {
 
             Some(Self {
                 indices: mesh.indices,
-                vertices: vertices,
                 clip: scissors,
+                vertices,
             })
         }
     }
