@@ -6,6 +6,10 @@ authors = ["sy1ntexx"]
 description = "D3D11 backend for egui library."
 repository = "https://github.com/sy1ntexx/egui-d3d11"
 license = "MIT"
+include = [
+    "src/shader/pixel.bin",
+    "src/shader/vertex.bin",
+]
 
 [package.metadata.docs.rs]
 default-target = "x86_64-pc-windows-msvc"
