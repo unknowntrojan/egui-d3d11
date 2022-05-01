@@ -61,7 +61,7 @@ where
 }
 
 impl<T> DirectX11App<T> {
-    const INPUT_ELEMENTS_DESC: [D3D11_INPUT_ELEMENT_DESC; 1] = [
+    const INPUT_ELEMENTS_DESC: [D3D11_INPUT_ELEMENT_DESC; 3] = [
         D3D11_INPUT_ELEMENT_DESC {
             SemanticName: p_str!("POSITION"),
             SemanticIndex: 0,
@@ -71,24 +71,24 @@ impl<T> DirectX11App<T> {
             InputSlotClass: D3D11_INPUT_PER_VERTEX_DATA,
             InstanceDataStepRate: 0,
         },
-        // D3D11_INPUT_ELEMENT_DESC {
-        //     SemanticName: p_str!("TEXCOORD"),
-        //     SemanticIndex: 0,
-        //     Format: DXGI_FORMAT_R32G32_FLOAT,
-        //     InputSlot: 0,
-        //     AlignedByteOffset: D3D11_APPEND_ALIGNED_ELEMENT,
-        //     InputSlotClass: D3D11_INPUT_PER_VERTEX_DATA,
-        //     InstanceDataStepRate: 0,
-        // },
-        // D3D11_INPUT_ELEMENT_DESC {
-        //     SemanticName: p_str!("COLOR"),
-        //     SemanticIndex: 0,
-        //     Format: DXGI_FORMAT_R8G8B8A8_UNORM,
-        //     InputSlot: 0,
-        //     AlignedByteOffset: D3D11_APPEND_ALIGNED_ELEMENT,
-        //     InputSlotClass: D3D11_INPUT_PER_VERTEX_DATA,
-        //     InstanceDataStepRate: 0,
-        // },
+        D3D11_INPUT_ELEMENT_DESC {
+            SemanticName: p_str!("TEXCOORD"),
+            SemanticIndex: 0,
+            Format: DXGI_FORMAT_R32G32_FLOAT,
+            InputSlot: 0,
+            AlignedByteOffset: D3D11_APPEND_ALIGNED_ELEMENT,
+            InputSlotClass: D3D11_INPUT_PER_VERTEX_DATA,
+            InstanceDataStepRate: 0,
+        },
+        D3D11_INPUT_ELEMENT_DESC {
+            SemanticName: p_str!("COLOR"),
+            SemanticIndex: 0,
+            Format: DXGI_FORMAT_R8G8B8A8_UINT,
+            InputSlot: 0,
+            AlignedByteOffset: D3D11_APPEND_ALIGNED_ELEMENT,
+            InputSlotClass: D3D11_INPUT_PER_VERTEX_DATA,
+            InstanceDataStepRate: 0,
+        },
     ];
 }
 
@@ -211,32 +211,29 @@ impl<T> DirectX11App<T> {
             ctx.IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
             ctx.IASetInputLayout(&self.input_layout);
 
-            // for (_, mesh) in primitives {
-            //     let index_buffer = create_index_buffer(dev, &mesh);
-            //     let vertex_buffer = create_vertex_buffer(dev, &mesh);
+            for (_, mesh) in primitives {
+                let idx = create_index_buffer_raw(dev, mesh.indices.as_ptr() as _, mesh.indices.len() * 4);
+                let vtx = create_vertex_buffer_raw(dev, mesh.vertices.as_ptr() as _, mesh.vertices.len() * size_of::<Vertex>());
 
-            //     ctx.IASetVertexBuffers(0, 1, &Some(vertex_buffer), &(size_of::<Vertex>() as _), &0);
-            //     ctx.IASetIndexBuffer(index_buffer, DXGI_FORMAT_R32_UINT, 0);
-            //     ctx.VSSetShader(&self.shaders.vertex, &None, 0);
-            //     ctx.PSSetShader(&self.shaders.pixel, &None, 0);
+                ctx.IASetVertexBuffers(0, 1, &Some(vtx), &(size_of::<Vertex>() as _), &0);
+                ctx.IASetIndexBuffer(idx, DXGI_FORMAT_R32_UINT, 0);
+                ctx.VSSetShader(&self.shaders.vertex, &None, 0);
+                ctx.PSSetShader(&self.shaders.pixel, &None, 0);
 
-            //     ctx.DrawIndexed(mesh.indices.len() as _, 0, 0);
-            //     println!("Draw call");
-            // }
+                ctx.DrawIndexed(mesh.indices.len() as _, 0, 0);
+            }
 
-            type Vertex = (f32, f32);
-            const TRIANGLE: [Vertex; 3] = [(0., 0.5), (0.5, -0.5), (-0.5, -0.5)];
-            const INDICES: [u32; 3] = [0, 1, 2];
+            // type Vertex = (f32, f32);
+            // const TRIANGLE: [Vertex; 3] = [(0., 0.5), (0.5, -0.5), (-0.5, -0.5)];
+            // const INDICES: [u32; 3] = [0, 1, 2];
             
-            let idx = create_index_buffer_raw(dev, INDICES.as_ptr() as _, 3 * 4);
-            let vtx = create_vertex_buffer_raw(dev, TRIANGLE.as_ptr() as _, 6 * 4);
-            ctx.IASetVertexBuffers(0, 1, &Some(vtx), &(size_of::<Vertex>() as u32), &0);
-            ctx.IASetIndexBuffer(idx, DXGI_FORMAT_R32_UINT, 0);
+            // ctx.IASetVertexBuffers(0, 1, &Some(vtx), &(size_of::<Vertex>() as u32), &0);
+            // ctx.IASetIndexBuffer(idx, DXGI_FORMAT_R32_UINT, 0);
 
-            ctx.VSSetShader(&self.shaders.vertex, &None, 0);
-            ctx.PSSetShader(&self.shaders.pixel, &None, 0);
+            // ctx.VSSetShader(&self.shaders.vertex, &None, 0);
+            // ctx.PSSetShader(&self.shaders.pixel, &None, 0);
 
-            ctx.DrawIndexed(3, 0, 0);
+            // ctx.DrawIndexed(3, 0, 0);
         }
     }
 
