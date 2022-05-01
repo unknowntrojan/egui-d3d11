@@ -10,9 +10,9 @@ macro_rules! expect {
 }
 
 /// Creates zero terminated string.
-macro_rules! c_str {
+macro_rules! pc_str {
     ($cstr:expr) => {
-        windows::Win32::Foundation::PSTR(concat!($cstr, "\x00").as_ptr() as _)
+        windows::core::PCSTR(concat!($cstr, "\x00").as_ptr() as _)
     };
 }
 

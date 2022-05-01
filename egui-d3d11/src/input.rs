@@ -219,7 +219,7 @@ impl InputCollector {
     pub fn get_system_time() -> f64 {
         let mut time = 0;
         unsafe {
-            expect!(NtQuerySystemTime(&mut time), "Failed to get system time.");
+            expect!(NtQuerySystemTime(&mut time), "Failed to get system time");
         }
 
         // dumb ass, read the docs. egui clearly says `in seconds`.
@@ -309,7 +309,7 @@ fn get_key(wparam: usize) -> Option<Key> {
 fn get_clipboard_text() -> Option<String> {
     unsafe {
         if OpenClipboard(HWND::default()).as_bool() {
-            let txt = GetClipboardData(CF_TEXT.0).0 as *const i8;
+            let txt = GetClipboardData(CF_TEXT.0).ok()?.0 as *const i8;
             let data = Some(CStr::from_ptr(txt).to_str().ok()?.to_string());
             CloseClipboard();
             data

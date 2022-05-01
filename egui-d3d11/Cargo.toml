@@ -26,7 +26,7 @@ force-compile = []
 save-blob = []
 
 [dependencies.windows]
-version = "0.32.0"
+version = "0.36.1"
 features = [
     "Win32_UI_Input_KeyboardAndMouse",
     "Win32_System_WindowsProgramming",

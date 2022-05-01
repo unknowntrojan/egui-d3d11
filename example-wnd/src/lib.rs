@@ -41,10 +41,9 @@ unsafe extern "stdcall" fn hk_present(
         APP = Some(DirectX11App::new_with_default(ui, &swap_chain));
 
         let desc = swap_chain.GetDesc().unwrap();
-        if desc.OutputWindow.is_invalid() {
-            panic!("Invalid window handle.");
+        if desc.OutputWindow.0 == -1 {
+            panic!("Invalid window handle");
         }
-        eprintln!("Buffer fmt: {}", desc.BufferDesc.Format.0);
 
         OLD_WND_PROC = Some(transmute(SetWindowLongPtrA(
             desc.OutputWindow,
@@ -68,6 +67,8 @@ unsafe extern "stdcall" fn hk_resize_buffers(
     new_format: DXGI_FORMAT,
     swap_chain_flags: u32,
 ) -> HRESULT {
+    eprintln!("Resizing buffers");
+
     APP.as_ref().unwrap().resize_buffers(&swap_chain, || {
         O_RESIZE_BUFFERS.as_ref().unwrap()(
             swap_chain.clone(),

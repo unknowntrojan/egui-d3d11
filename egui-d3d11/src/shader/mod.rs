@@ -1,7 +1,7 @@
 use std::ptr::null_mut as null;
-use windows::Win32::{
-    Foundation::PSTR,
-    Graphics::{
+use windows::{
+    core::PCSTR,
+    Win32::Graphics::{
         Direct3D::{
             Fxc::{D3DCompile, D3DCOMPILE_DEBUG, D3DCOMPILE_ENABLE_STRICTNESS},
             ID3DBlob,
@@ -11,8 +11,8 @@ use windows::Win32::{
 };
 
 trait Shader {
-    const ENTRY_POINT: PSTR;
-    const TARGET: PSTR;
+    const ENTRY_POINT: PCSTR;
+    const TARGET: PCSTR;
 
     unsafe fn create(device: &ID3D11Device, blob: &ShaderData) -> Self;
 }
@@ -24,34 +24,34 @@ enum ShaderData {
 }
 
 impl Shader for ID3D11VertexShader {
-    const ENTRY_POINT: PSTR = c_str!("vs_main");
-    const TARGET: PSTR = c_str!("vs_5_0");
+    const ENTRY_POINT: PCSTR = pc_str!("vs_main");
+    const TARGET: PCSTR = pc_str!("vs_5_0");
 
     unsafe fn create(device: &ID3D11Device, blob: &ShaderData) -> Self {
-        let (ptr, len) = match blob {
-            ShaderData::CompiledBlob(b) => (b.GetBufferPointer(), b.GetBufferSize()),
-            ShaderData::EmbeddedData(d) => (d.as_ptr() as _, d.len()),
+        let data = match blob {
+            ShaderData::CompiledBlob(b) => std::slice::from_raw_parts(b.GetBufferPointer() as *mut u8, b.GetBufferSize()),
+            ShaderData::EmbeddedData(d) => *d,
         };
 
         expect!(
-            device.CreateVertexShader(ptr, len, None),
-            "Failed to create vertex shader."
+            device.CreateVertexShader(data, None),
+            "Failed to create vertex shader"
         )
     }
 }
 
 impl Shader for ID3D11PixelShader {
-    const ENTRY_POINT: PSTR = c_str!("ps_main");
-    const TARGET: PSTR = c_str!("ps_5_0");
+    const ENTRY_POINT: PCSTR = pc_str!("ps_main");
+    const TARGET: PCSTR = pc_str!("ps_5_0");
 
     unsafe fn create(device: &ID3D11Device, blob: &ShaderData) -> Self {
-        let (ptr, len) = match blob {
-            ShaderData::CompiledBlob(b) => (b.GetBufferPointer(), b.GetBufferSize()),
-            ShaderData::EmbeddedData(d) => (d.as_ptr() as _, d.len()),
+        let data = match blob {
+            ShaderData::CompiledBlob(b) => std::slice::from_raw_parts(b.GetBufferPointer() as *mut u8, b.GetBufferSize()),
+            ShaderData::EmbeddedData(d) => *d,
         };
         expect!(
-            device.CreatePixelShader(ptr, len, None),
-            "Failed to create pixel shader."
+            device.CreatePixelShader(data, None),
+            "Failed to create pixel shader"
         )
     }
 }
@@ -66,46 +66,17 @@ pub struct CompiledShaders {
 #[allow(dead_code)]
 impl CompiledShaders {
     #[inline]
-    pub fn get_vertex_bytecode(&self) -> *mut () {
+    pub fn vertex_bytecode(&self) -> &[u8] {
         unsafe {
             match &self.bytecode {
-                ShaderData::CompiledBlob(b) => b.GetBufferPointer() as _,
-                ShaderData::EmbeddedData(d) => d.as_ptr() as _,
+                ShaderData::CompiledBlob(b) => {
+                    std::slice::from_raw_parts(b.GetBufferPointer() as *mut u8, b.GetBufferSize())
+                }
+                ShaderData::EmbeddedData(d) => *d,
             }
         }
     }
 
-    #[inline]
-    pub fn get_vertex_bytecode_len(&self) -> usize {
-        unsafe {
-            match &self.bytecode {
-                ShaderData::CompiledBlob(b) => b.GetBufferSize(),
-                ShaderData::EmbeddedData(d) => d.len(),
-            }
-        }
-    }
-
-    #[cfg(not(feature = "force-compile"))]
-    pub fn new(device: &ID3D11Device) -> Self {
-        static VERTEX_DATA: &[u8] = include_bytes!("vertex_blob.bin");
-
-        let vertex = Self::create_shader::<ID3D11VertexShader>(
-            device,
-            &ShaderData::EmbeddedData(VERTEX_DATA),
-        );
-        let pixel = Self::create_shader::<ID3D11PixelShader>(
-            device,
-            &ShaderData::EmbeddedData(include_bytes!("pixel_blob.bin")),
-        );
-
-        Self {
-            vertex,
-            pixel,
-            bytecode: ShaderData::EmbeddedData(VERTEX_DATA),
-        }
-    }
-
-    #[cfg(feature = "force-compile")]
     pub fn new(device: &ID3D11Device) -> Self {
         let vblob = Self::compile_shader::<ID3D11VertexShader>();
         let pblob = Self::compile_shader::<ID3D11PixelShader>();
@@ -119,28 +90,6 @@ impl CompiledShaders {
             &ShaderData::CompiledBlob(pblob.clone()),
         );
 
-        if cfg!(feature = "save-blob") {
-            unsafe {
-                std::fs::write(
-                    "vertex_blob.bin",
-                    std::slice::from_raw_parts(
-                        vblob.GetBufferPointer() as *const u8,
-                        vblob.GetBufferSize(),
-                    ),
-                )
-                .unwrap();
-
-                std::fs::write(
-                    "pixel_blob.bin",
-                    std::slice::from_raw_parts(
-                        pblob.GetBufferPointer() as *const u8,
-                        pblob.GetBufferSize(),
-                    ),
-                )
-                .unwrap();
-            }
-        }
-
         Self {
             vertex,
             pixel,
@@ -148,7 +97,6 @@ impl CompiledShaders {
         }
     }
 
-    #[allow(dead_code)]
     fn compile_shader<S>() -> ID3DBlob
     where
         S: Shader,
@@ -167,7 +115,7 @@ impl CompiledShaders {
             if D3DCompile(
                 SHADER_TEXT.as_ptr() as _,
                 SHADER_TEXT.len() as _,
-                PSTR(null()),
+                PCSTR(null()),
                 null(),
                 None,
                 S::ENTRY_POINT,
