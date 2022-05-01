@@ -31,6 +31,22 @@ pub fn create_vertex_buffer(device: &ID3D11Device, mesh: &Mesh) -> ID3D11Buffer 
     unsafe { expect!(device.CreateBuffer(&desc, &init), "Failed to create vertex buffer") }
 }
 
+pub fn create_vertex_buffer_raw(device: &ID3D11Device, ptr: *const (), size: usize) -> ID3D11Buffer {
+    let desc = D3D11_BUFFER_DESC {
+        ByteWidth: size as u32,
+        Usage: D3D11_USAGE_DEFAULT,
+        BindFlags: D3D11_BIND_VERTEX_BUFFER.0,
+        ..Default::default()
+    };
+
+    let init = D3D11_SUBRESOURCE_DATA {
+        pSysMem: ptr as _,
+        ..Default::default()
+    };
+
+    unsafe { expect!(device.CreateBuffer(&desc, &init), "Failed to create vertex buffer") }
+}
+
 pub fn create_index_buffer(device: &ID3D11Device, mesh: &Mesh) -> ID3D11Buffer {
     let desc = D3D11_BUFFER_DESC {
         ByteWidth: (mesh.indices.len() * size_of::<u32>()) as u32,
@@ -46,3 +62,20 @@ pub fn create_index_buffer(device: &ID3D11Device, mesh: &Mesh) -> ID3D11Buffer {
 
     unsafe { expect!(device.CreateBuffer(&desc, &init), "Failed to create index buffer") }
 }
+
+pub fn create_index_buffer_raw(device: &ID3D11Device, ptr: *const (), size: usize) -> ID3D11Buffer {
+    let desc = D3D11_BUFFER_DESC {
+        ByteWidth: size as u32,
+        Usage: D3D11_USAGE_DEFAULT,
+        BindFlags: D3D11_BIND_INDEX_BUFFER.0,
+        ..Default::default()
+    };
+
+    let init = D3D11_SUBRESOURCE_DATA {
+        pSysMem: ptr as _,
+        ..Default::default()
+    };
+
+    unsafe { expect!(device.CreateBuffer(&desc, &init), "Failed to create index buffer") }
+}
+
