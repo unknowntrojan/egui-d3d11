@@ -1,4 +1,4 @@
-use egui::Context;
+use egui::{epaint::Primitive, Context};
 use parking_lot::{Mutex, MutexGuard};
 use std::mem::{size_of, size_of_val};
 use windows::{
@@ -21,6 +21,7 @@ use windows::{
 
 use crate::{
     input::{InputCollector, InputResult},
+    mesh::{create_index_buffer, create_vertex_buffer},
     shader::CompiledShaders,
 };
 
@@ -31,11 +32,11 @@ use crate::{
 /// * [`Self::wnd_proc`] - Should be called on each `WndProc`.
 pub struct DirectX11App<T = ()> {
     render_view: Mutex<Option<ID3D11RenderTargetView>>,
-    _ui: Box<dyn FnMut(&Context, &mut T) + 'static>,
+    ui: Box<dyn FnMut(&Context, &mut T) + 'static>,
     input_layout: ID3D11InputLayout,
     input_collector: InputCollector,
     shaders: CompiledShaders,
-    _ctx: Mutex<Context>,
+    ctx: Mutex<Context>,
     state: Mutex<T>,
     hwnd: HWND,
 }
@@ -150,9 +151,9 @@ impl<T> DirectX11App<T> {
 
             Self {
                 input_collector: InputCollector::new(hwnd),
-                _ctx: Mutex::new(Context::default()),
+                ctx: Mutex::new(Context::default()),
                 state: Mutex::new(state),
-                _ui: Box::new(ui),
+                ui: Box::new(ui),
                 input_layout,
                 render_view,
                 shaders,
@@ -166,9 +167,39 @@ impl<T> DirectX11App<T> {
         const TRIANGLE: [f32; 9] = [0.0, 0.5, 0.0, 0.5, -0.5, 0.0, -0.5, -0.5, 0.0];
 
         unsafe {
-            let (device, context) = get_device_and_context(swap_chain);
+            let (dev, context) = &get_device_and_context(swap_chain);
 
             let view_lock = &*self.render_view.lock();
+            let state_lock = &mut *self.state.lock();
+            let ctx_lock = &mut *self.ctx.lock();
+
+            let output = ctx_lock.run(self.input_collector.collect_input(), |ctx| {
+                // Dont look here, it should be fine until someone tries to do something horrible.
+                (*(self.ui.as_ref() as *const _ as *mut dyn FnMut(&Context, &mut T)))(
+                    ctx, state_lock,
+                )
+            });
+
+            if !output.platform_output.copied_text.is_empty() {
+                // @TODO: Paste text
+            }
+
+            let primitives = ctx_lock
+                .tessellate(output.shapes)
+                .into_iter()
+                .filter_map(|prim| {
+                    if let Primitive::Mesh(mesh) = prim.primitive {
+                        Some((prim.clip_rect, mesh))
+                    } else {
+                        panic!("Paint callbacks are not yet supported")
+                    }
+                })
+                .collect::<Vec<_>>();
+
+            for (clip, mesh) in primitives {
+                let index_buffer = create_index_buffer(dev, &mesh);
+                let vertex_buffer = create_vertex_buffer(dev, &mesh);
+            }
 
             let desc = D3D11_BUFFER_DESC {
                 ByteWidth: size_of_val(&TRIANGLE) as _,
@@ -185,22 +216,11 @@ impl<T> DirectX11App<T> {
                 SysMemSlicePitch: 0,
             };
 
-            let buf = expect!(device.CreateBuffer(&desc, &data), "Failed to create buffer");
+            let buf = expect!(dev.CreateBuffer(&desc, &data), "Failed to create buffer");
             if cfg!(feature = "clear") {
                 context.ClearRenderTargetView(view_lock, [0.39, 0.58, 0.92, 1.].as_ptr());
             }
-
-            let mut rect = RECT::default();
-            GetClientRect(self.hwnd, &mut rect);
-            let viewport = D3D11_VIEWPORT {
-                TopLeftX: 0.,
-                TopLeftY: 0.,
-                Width: (rect.right - rect.left) as f32,
-                Height: (rect.bottom - rect.top) as f32,
-                MinDepth: 0.,
-                MaxDepth: 1.,
-            };
-            context.RSSetViewports(1, &viewport as _);
+            context.RSSetViewports(1, &self.get_viewport() as _);
             context.OMSetRenderTargets(1, view_lock, None);
 
             context.IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -235,7 +255,8 @@ impl<T> DirectX11App<T> {
                 "Failed to get swapchain's backbuffer"
             );
 
-            let device: ID3D11Device = expect!(swap_chain.GetDevice(), "Failed to get swapchain's device");
+            let device: ID3D11Device =
+                expect!(swap_chain.GetDevice(), "Failed to get swapchain's device");
 
             let new_view = expect!(
                 device.CreateRenderTargetView(backbuffer, 0 as _),
@@ -253,6 +274,33 @@ impl<T> DirectX11App<T> {
     #[inline]
     pub fn wnd_proc(&self, umsg: u32, wparam: WPARAM, lparam: LPARAM) -> InputResult {
         self.input_collector.process(umsg, wparam.0, lparam.0)
+    }
+}
+
+impl<T> DirectX11App<T> {
+    #[inline]
+    fn get_screen_size(&self) -> (f32, f32) {
+        let mut rect = RECT::default();
+        unsafe {
+            GetClientRect(self.hwnd, &mut rect);
+        }
+        (
+            (rect.right - rect.left) as f32,
+            (rect.bottom - rect.top) as f32,
+        )
+    }
+
+    #[inline]
+    fn get_viewport(&self) -> D3D11_VIEWPORT {
+        let (w, h) = self.get_screen_size();
+        D3D11_VIEWPORT {
+            TopLeftX: 0.,
+            TopLeftY: 0.,
+            Width: w,
+            Height: h,
+            MinDepth: 0.,
+            MaxDepth: 1.,
+        }
     }
 }
 

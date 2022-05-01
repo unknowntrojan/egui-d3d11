@@ -20,6 +20,7 @@ mod app;
 pub use app::*;
 
 mod input;
-pub use input::InputResult;
-
+mod mesh;
 mod shader;
+
+pub use input::InputResult;
