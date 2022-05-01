@@ -1,7 +1,6 @@
-use std::{mem::{size_of, size_of_val}, slice::from_ref};
-
 use egui::Context;
 use parking_lot::{Mutex, MutexGuard};
+use std::mem::{size_of, size_of_val};
 use windows::{
     core::HRESULT,
     Win32::{
@@ -15,7 +14,7 @@ use windows::{
                 D3D11_USAGE_DEFAULT, D3D11_VIEWPORT,
             },
             Dxgi::{
-                Common::{DXGI_FORMAT_R32G32_FLOAT, DXGI_FORMAT_R32G32B32_FLOAT},
+                Common::DXGI_FORMAT_R32G32B32_FLOAT,
                 IDXGISwapChain,
             },
         },
@@ -24,7 +23,6 @@ use windows::{
 };
 
 use crate::{
-    backup::BackupState,
     input::{InputCollector, InputResult},
     shader::CompiledShaders,
 };
@@ -41,7 +39,6 @@ pub struct DirectX11App<T = ()> {
     input_collector: InputCollector,
     shaders: CompiledShaders,
     _ctx: Mutex<Context>,
-    backup: BackupState,
     state: Mutex<T>,
     hwnd: HWND,
 }
@@ -63,7 +60,7 @@ where
 impl<T> DirectX11App<T> {
     const INPUT_ELEMENTS_DESC: [D3D11_INPUT_ELEMENT_DESC; 1] = [
         D3D11_INPUT_ELEMENT_DESC {
-            SemanticName: pc_str!("POS"),
+            SemanticName: p_str!("POS"),
             SemanticIndex: 0,
             Format: DXGI_FORMAT_R32G32B32_FLOAT,
             InputSlot: 0,
@@ -72,22 +69,22 @@ impl<T> DirectX11App<T> {
             InstanceDataStepRate: 0,
         },
         // D3D11_INPUT_ELEMENT_DESC {
-            // SemanticName: pc_str!("TEXCOORD"),
-            // SemanticIndex: 0,
-            // Format: DXGI_FORMAT_R32G32_FLOAT,
-            // InputSlot: 0,
-            // AlignedByteOffset: D3D11_APPEND_ALIGNED_ELEMENT,
-            // InputSlotClass: D3D11_INPUT_PER_VERTEX_DATA,
-            // InstanceDataStepRate: 0,
+        // SemanticName: pc_str!("TEXCOORD"),
+        // SemanticIndex: 0,
+        // Format: DXGI_FORMAT_R32G32_FLOAT,
+        // InputSlot: 0,
+        // AlignedByteOffset: D3D11_APPEND_ALIGNED_ELEMENT,
+        // InputSlotClass: D3D11_INPUT_PER_VERTEX_DATA,
+        // InstanceDataStepRate: 0,
         // },
         // D3D11_INPUT_ELEMENT_DESC {
-            // SemanticName: pc_str!("COLOR"),
-            // SemanticIndex: 0,
-            // Format: DXGI_FORMAT_R8G8B8A8_UINT,
-            // InputSlot: 0,
-            // AlignedByteOffset: D3D11_APPEND_ALIGNED_ELEMENT,
-            // InputSlotClass: D3D11_INPUT_PER_VERTEX_DATA,
-            // InstanceDataStepRate: 0,
+        // SemanticName: pc_str!("COLOR"),
+        // SemanticIndex: 0,
+        // Format: DXGI_FORMAT_R8G8B8A8_UINT,
+        // InputSlot: 0,
+        // AlignedByteOffset: D3D11_APPEND_ALIGNED_ELEMENT,
+        // InputSlotClass: D3D11_INPUT_PER_VERTEX_DATA,
+        // InstanceDataStepRate: 0,
         // },
     ];
 }
@@ -141,8 +138,12 @@ impl<T> DirectX11App<T> {
 
             let shaders = CompiledShaders::new(&device);
             let input_layout = expect!(
-                device
-                    .CreateInputLayout(&Self::INPUT_ELEMENTS_DESC, shaders.vertex_bytecode() as _,),
+                device.CreateInputLayout(
+                    Self::INPUT_ELEMENTS_DESC.as_ptr() as _,
+                    Self::INPUT_ELEMENTS_DESC.len() as _,
+                    shaders.bytecode_ptr() as _,
+                    shaders.bytecode_len()
+                ),
                 "Failed to create input layout"
             );
 
@@ -153,7 +154,6 @@ impl<T> DirectX11App<T> {
             Self {
                 input_collector: InputCollector::new(hwnd),
                 _ctx: Mutex::new(Context::default()),
-                backup: BackupState::default(),
                 state: Mutex::new(state),
                 _ui: Box::new(ui),
                 input_layout,
@@ -171,8 +171,6 @@ impl<T> DirectX11App<T> {
 
         unsafe {
             let (device, context) = get_device_and_context(swap_chain);
-
-            self.backup.save(&context);
 
             let desc = D3D11_BUFFER_DESC {
                 ByteWidth: size_of_val(&TRIANGLE) as _,
@@ -202,20 +200,19 @@ impl<T> DirectX11App<T> {
                     MinDepth: 0.,
                     MaxDepth: 1.,
                 };
-                context.RSSetViewports(&[viewport]);
-                context.OMSetRenderTargets(from_ref(&self.render_view), None);
-    
+                context.RSSetViewports(1, &viewport as _);
+                context.OMSetRenderTargets(1, &self.render_view, None);
+
                 context.IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
                 context.IASetInputLayout(&self.input_layout);
-                
+
                 let strides = (3 * size_of::<f32>()) as u32;
                 let offsets = 0u32;
                 context.IASetVertexBuffers(0, 1, &Some(buf), &strides as _, &offsets);
-                context.VSSetShader(self.shaders.vertex.clone(), &[None]);
-                context.PSSetShader(self.shaders.pixel.clone(), &[None]);
+                context.VSSetShader(&self.shaders.vertex, &None, 0);
+                context.PSSetShader(&self.shaders.pixel, &None, 0);
                 context.Draw(3, 0);
 
-                self.backup.restore(&context);
                 println!("Last");
             } else {
                 eprintln!("wtf: {:#?}", device.GetDeviceRemovedReason());

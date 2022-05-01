@@ -10,9 +10,9 @@ macro_rules! expect {
 }
 
 /// Creates zero terminated string.
-macro_rules! pc_str {
+macro_rules! p_str {
     ($cstr:expr) => {
-        windows::core::PCSTR(concat!($cstr, "\x00").as_ptr() as _)
+        windows::Win32::Foundation::PSTR(concat!($cstr, "\x00").as_ptr() as _)
     };
 }
 
@@ -22,5 +22,4 @@ pub use app::*;
 mod input;
 pub use input::InputResult;
 
-mod backup;
 mod shader;
