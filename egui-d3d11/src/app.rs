@@ -164,7 +164,6 @@ impl<T> DirectX11App<T> {
     /// Present call. Should be called once per original present call, before or inside of hook.
     pub fn present(&self, swap_chain: &IDXGISwapChain, _sync_interval: u32, _flags: u32) {
         const TRIANGLE: [f32; 9] = [0.0, 0.5, 0.0, 0.5, -0.5, 0.0, -0.5, -0.5, 0.0];
-        const CLEAR_COLOR: [f32; 4] = [0.39, 0.58, 0.92, 1.];
 
         unsafe {
             let (device, context) = get_device_and_context(swap_chain);
@@ -187,7 +186,9 @@ impl<T> DirectX11App<T> {
             };
 
             let buf = expect!(device.CreateBuffer(&desc, &data), "Failed to create buffer");
-            context.ClearRenderTargetView(view_lock, CLEAR_COLOR.as_ptr());
+            if cfg!(feature = "clear") {
+                context.ClearRenderTargetView(view_lock, [0.39, 0.58, 0.92, 1.].as_ptr());
+            }
 
             let mut rect = RECT::default();
             GetClientRect(self.hwnd, &mut rect);
@@ -218,13 +219,32 @@ impl<T> DirectX11App<T> {
     /// Do not call the original function before it, instead call it inside of the `original` closure.
     /// # Behavior
     /// In `origin` closure make sure to call the original `ResizeBuffers`.
-    #[allow(clippy::too_many_arguments)]
     pub fn resize_buffers(
         &self,
-        _swap_chain: &IDXGISwapChain,
-        _original: impl FnOnce() -> HRESULT,
+        swap_chain: &IDXGISwapChain,
+        original: impl FnOnce() -> HRESULT,
     ) -> HRESULT {
-        todo!()
+        unsafe {
+            let view_lock = &mut *self.render_view.lock();
+            std::ptr::drop_in_place(view_lock);
+
+            let result = original();
+
+            let backbuffer: ID3D11Texture2D = expect!(
+                swap_chain.GetBuffer(0),
+                "Failed to get swapchain's backbuffer"
+            );
+
+            let device: ID3D11Device = expect!(swap_chain.GetDevice(), "Failed to get swapchain's device");
+
+            let new_view = expect!(
+                device.CreateRenderTargetView(backbuffer, 0 as _),
+                "Failed to create render target view"
+            );
+
+            *view_lock = Some(new_view);
+            result
+        }
     }
 
     /// Call on each `WndProc` occurence.
