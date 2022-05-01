@@ -56,12 +56,14 @@ impl Shader for ID3D11PixelShader {
     }
 }
 
+#[allow(dead_code)]
 pub struct CompiledShaders {
     pub vertex: ID3D11VertexShader,
     pub pixel: ID3D11PixelShader,
     bytecode: ShaderData,
 }
 
+#[allow(dead_code)]
 impl CompiledShaders {
     #[inline]
     pub fn get_vertex_bytecode(&self) -> *mut () {

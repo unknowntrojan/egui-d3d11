@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use egui::{Event, Key, Modifiers, PointerButton, Pos2, RawInput, Rect, Vec2};
 use parking_lot::Mutex;
 use std::ffi::CStr;

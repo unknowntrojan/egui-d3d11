@@ -23,6 +23,4 @@ mod input;
 pub use input::InputResult;
 
 mod backup;
-mod mesh;
 mod shader;
-mod texture;

@@ -19,6 +19,7 @@ use windows::Win32::{
 #[derive(Default)]
 pub struct BackupState(RefCell<InnerState>);
 
+#[allow(dead_code)]
 impl BackupState {
     #[inline]
     pub fn save(&self, context: &ID3D11DeviceContext) {
@@ -35,6 +36,7 @@ impl BackupState {
     }
 }
 
+#[allow(dead_code)]
 #[derive(Default)]
 struct InnerState {
     scissor_rects: [RECT; D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE as _],

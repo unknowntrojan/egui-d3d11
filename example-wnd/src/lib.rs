@@ -157,7 +157,8 @@ fn ui(ctx: &Context, i: &mut i32) {
             // use `once_cell` crate instead of unsafe code!!!
             static mut IMG: Option<TextureId> = None;
             if IMG.is_none() {
-                let s = egui_extras::image::load_image_bytes(include_bytes!("../../logo.bmp")).unwrap();
+                let s =
+                    egui_extras::image::load_image_bytes(include_bytes!("../../logo.bmp")).unwrap();
                 IMG = Some(ctx.load_texture("logo", s).id());
             }
 
@@ -239,3 +240,6 @@ unsafe fn main_thread(_hinst: usize) {
     #[allow(clippy::empty_loop)]
     loop {}
 }
+
+// for<'r, 's> fn(&'r egui::Context, &'s mut i32) -> _
+// for<'r, 's> fn(&'r egui::context::Context, &'s mut _) -> _

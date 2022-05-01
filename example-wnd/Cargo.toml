@@ -11,12 +11,12 @@ crate-type = ["cdylib"]
 
 [dependencies]
 faithe = "0.3.1"
-egui = "0.17"
+egui = "0.18"
 libc = "0.2.112"
 image = { version = "0.24", features = ["jpeg"] }
 
 [dependencies.egui_extras]
-version = "0.17"
+version = "0.18"
 features = ["image"]
 
 [dependencies.egui-d3d11]
