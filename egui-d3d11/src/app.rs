@@ -13,10 +13,7 @@ use windows::{
                 D3D11_INPUT_ELEMENT_DESC, D3D11_INPUT_PER_VERTEX_DATA, D3D11_SUBRESOURCE_DATA,
                 D3D11_USAGE_DEFAULT, D3D11_VIEWPORT,
             },
-            Dxgi::{
-                Common::DXGI_FORMAT_R32G32B32_FLOAT,
-                IDXGISwapChain,
-            },
+            Dxgi::{Common::DXGI_FORMAT_R32G32B32_FLOAT, IDXGISwapChain},
         },
         UI::WindowsAndMessaging::GetClientRect,
     },
@@ -33,8 +30,8 @@ use crate::{
 /// * [`Self::resize_buffers`] - Should be called **INSTEAD** of swapchain's `ResizeBuffers`.
 /// * [`Self::wnd_proc`] - Should be called on each `WndProc`.
 pub struct DirectX11App<T = ()> {
+    render_view: Mutex<Option<ID3D11RenderTargetView>>,
     _ui: Box<dyn FnMut(&Context, &mut T) + 'static>,
-    render_view: Option<ID3D11RenderTargetView>,
     input_layout: ID3D11InputLayout,
     input_collector: InputCollector,
     shaders: CompiledShaders,
@@ -131,10 +128,10 @@ impl<T> DirectX11App<T> {
                 "Failed to get swapchain's backbuffer"
             );
 
-            let render_view = Some(expect!(
+            let render_view = Mutex::new(Some(expect!(
                 device.CreateRenderTargetView(backbuffer, 0 as _),
                 "Failed to create render target view"
-            ));
+            )));
 
             let shaders = CompiledShaders::new(&device);
             let input_layout = expect!(
@@ -172,6 +169,8 @@ impl<T> DirectX11App<T> {
         unsafe {
             let (device, context) = get_device_and_context(swap_chain);
 
+            let view_lock = &*self.render_view.lock();
+
             let desc = D3D11_BUFFER_DESC {
                 ByteWidth: size_of_val(&TRIANGLE) as _,
                 Usage: D3D11_USAGE_DEFAULT,
@@ -187,37 +186,31 @@ impl<T> DirectX11App<T> {
                 SysMemSlicePitch: 0,
             };
 
-            if let Ok(buf) = device.CreateBuffer(&desc, &data) {
-                context.ClearRenderTargetView(&self.render_view, CLEAR_COLOR.as_ptr());
+            let buf = expect!(device.CreateBuffer(&desc, &data), "Failed to create buffer");
+            context.ClearRenderTargetView(view_lock, CLEAR_COLOR.as_ptr());
 
-                let mut rect = RECT::default();
-                GetClientRect(self.hwnd, &mut rect);
-                let viewport = D3D11_VIEWPORT {
-                    TopLeftX: 0.,
-                    TopLeftY: 0.,
-                    Width: (rect.right - rect.left) as f32,
-                    Height: (rect.bottom - rect.top) as f32,
-                    MinDepth: 0.,
-                    MaxDepth: 1.,
-                };
-                context.RSSetViewports(1, &viewport as _);
-                context.OMSetRenderTargets(1, &self.render_view, None);
+            let mut rect = RECT::default();
+            GetClientRect(self.hwnd, &mut rect);
+            let viewport = D3D11_VIEWPORT {
+                TopLeftX: 0.,
+                TopLeftY: 0.,
+                Width: (rect.right - rect.left) as f32,
+                Height: (rect.bottom - rect.top) as f32,
+                MinDepth: 0.,
+                MaxDepth: 1.,
+            };
+            context.RSSetViewports(1, &viewport as _);
+            context.OMSetRenderTargets(1, view_lock, None);
 
-                context.IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-                context.IASetInputLayout(&self.input_layout);
+            context.IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+            context.IASetInputLayout(&self.input_layout);
 
-                let strides = (3 * size_of::<f32>()) as u32;
-                let offsets = 0u32;
-                context.IASetVertexBuffers(0, 1, &Some(buf), &strides as _, &offsets);
-                context.VSSetShader(&self.shaders.vertex, &None, 0);
-                context.PSSetShader(&self.shaders.pixel, &None, 0);
-                context.Draw(3, 0);
-
-                println!("Last");
-            } else {
-                eprintln!("wtf: {:#?}", device.GetDeviceRemovedReason());
-                eprintln!("wtf: {:#?}", device.GetDeviceRemovedReason());
-            }
+            let strides = (3 * size_of::<f32>()) as u32;
+            let offsets = 0u32;
+            context.IASetVertexBuffers(0, 1, &Some(buf), &strides as _, &offsets);
+            context.VSSetShader(&self.shaders.vertex, &None, 0);
+            context.PSSetShader(&self.shaders.pixel, &None, 0);
+            context.Draw(3, 0);
         }
     }
 
