@@ -165,9 +165,7 @@ impl InputCollector {
                     let lock = &mut *self.events.lock();
                     let mods = get_key_modifiers(msg);
 
-                    if key == Key::Space {
-                        lock.push(Event::Text(String::from(" ")));
-                    } else if key == Key::V && mods.ctrl {
+                    if key == Key::V && mods.ctrl {
                         if let Some(clipboard) = get_clipboard_text() {
                             lock.push(Event::Text(clipboard));
                         }
