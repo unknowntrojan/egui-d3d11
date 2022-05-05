@@ -1,7 +1,6 @@
 #![allow(dead_code)]
 
 use egui::{Event, Key, Modifiers, PointerButton, Pos2, RawInput, Rect, Vec2};
-use parking_lot::Mutex;
 use std::ffi::CStr;
 use windows::Win32::{
     Foundation::{HWND, RECT},
@@ -27,7 +26,7 @@ use windows::Win32::{
 
 pub struct InputCollector {
     hwnd: HWND,
-    events: Mutex<Vec<Event>>,
+    events: Vec<Event>,
 }
 
 /// High-level overview of recognized `WndProc` messages.
@@ -60,20 +59,18 @@ impl InputCollector {
     pub fn new(hwnd: HWND) -> Self {
         Self {
             hwnd,
-            events: Mutex::new(vec![]),
+            events: vec![],
         }
     }
 
-    pub fn process(&self, umsg: u32, wparam: usize, lparam: isize) -> InputResult {
+    pub fn process(&mut self, umsg: u32, wparam: usize, lparam: isize) -> InputResult {
         match umsg {
             WM_MOUSEMOVE => {
-                self.events
-                    .lock()
-                    .push(Event::PointerMoved(get_pos(lparam)));
+                self.events.push(Event::PointerMoved(get_pos(lparam)));
                 InputResult::MouseMove
             }
             WM_LBUTTONDOWN | WM_LBUTTONDBLCLK => {
-                self.events.lock().push(Event::PointerButton {
+                self.events.push(Event::PointerButton {
                     pos: get_pos(lparam),
                     button: PointerButton::Primary,
                     pressed: true,
@@ -82,7 +79,7 @@ impl InputCollector {
                 InputResult::MouseLeft
             }
             WM_LBUTTONUP => {
-                self.events.lock().push(Event::PointerButton {
+                self.events.push(Event::PointerButton {
                     pos: get_pos(lparam),
                     button: PointerButton::Primary,
                     pressed: false,
@@ -91,7 +88,7 @@ impl InputCollector {
                 InputResult::MouseLeft
             }
             WM_RBUTTONDOWN | WM_RBUTTONDBLCLK => {
-                self.events.lock().push(Event::PointerButton {
+                self.events.push(Event::PointerButton {
                     pos: get_pos(lparam),
                     button: PointerButton::Secondary,
                     pressed: true,
@@ -100,7 +97,7 @@ impl InputCollector {
                 InputResult::MouseRight
             }
             WM_RBUTTONUP => {
-                self.events.lock().push(Event::PointerButton {
+                self.events.push(Event::PointerButton {
                     pos: get_pos(lparam),
                     button: PointerButton::Secondary,
                     pressed: false,
@@ -109,7 +106,7 @@ impl InputCollector {
                 InputResult::MouseRight
             }
             WM_MBUTTONDOWN | WM_MBUTTONDBLCLK => {
-                self.events.lock().push(Event::PointerButton {
+                self.events.push(Event::PointerButton {
                     pos: get_pos(lparam),
                     button: PointerButton::Middle,
                     pressed: true,
@@ -118,7 +115,7 @@ impl InputCollector {
                 InputResult::MouseMiddle
             }
             WM_MBUTTONUP => {
-                self.events.lock().push(Event::PointerButton {
+                self.events.push(Event::PointerButton {
                     pos: get_pos(lparam),
                     button: PointerButton::Middle,
                     pressed: false,
@@ -129,7 +126,7 @@ impl InputCollector {
             WM_CHAR => {
                 if let Some(ch) = char::from_u32(wparam as _) {
                     if !ch.is_control() {
-                        self.events.lock().push(Event::Text(ch.into()));
+                        self.events.push(Event::Text(ch.into()));
                     }
                 }
                 InputResult::Character
@@ -139,11 +136,10 @@ impl InputCollector {
 
                 if wparam & MK_CONTROL as usize != 0 {
                     self.events
-                        .lock()
                         .push(Event::Zoom(if delta > 0. { 1.5 } else { 0.5 }));
                     InputResult::Zoom
                 } else {
-                    self.events.lock().push(Event::Scroll(Vec2::new(0., delta)));
+                    self.events.push(Event::Scroll(Vec2::new(0., delta)));
                     InputResult::Scroll
                 }
             }
@@ -152,29 +148,27 @@ impl InputCollector {
 
                 if wparam & MK_CONTROL as usize != 0 {
                     self.events
-                        .lock()
                         .push(Event::Zoom(if delta > 0. { 1.5 } else { 0.5 }));
                     InputResult::Zoom
                 } else {
-                    self.events.lock().push(Event::Scroll(Vec2::new(delta, 0.)));
+                    self.events.push(Event::Scroll(Vec2::new(delta, 0.)));
                     InputResult::Scroll
                 }
             }
             msg @ (WM_KEYDOWN | WM_SYSKEYDOWN) => {
                 if let Some(key) = get_key(wparam) {
-                    let lock = &mut *self.events.lock();
                     let mods = get_key_modifiers(msg);
 
                     if key == Key::V && mods.ctrl {
                         if let Some(clipboard) = get_clipboard_text() {
-                            lock.push(Event::Text(clipboard));
+                            self.events.push(Event::Text(clipboard));
                         }
                     } else if key == Key::C && mods.ctrl {
-                        lock.push(Event::Copy);
+                        self.events.push(Event::Copy);
                     } else if key == Key::X && mods.ctrl {
-                        lock.push(Event::Cut);
+                        self.events.push(Event::Cut);
                     } else {
-                        lock.push(Event::Key {
+                        self.events.push(Event::Key {
                             key,
                             pressed: true,
                             modifiers: get_key_modifiers(msg),
@@ -185,7 +179,7 @@ impl InputCollector {
             }
             msg @ (WM_KEYUP | WM_SYSKEYUP) => {
                 if let Some(key) = get_key(wparam) {
-                    self.events.lock().push(Event::Key {
+                    self.events.push(Event::Key {
                         key,
                         pressed: false,
                         modifiers: get_key_modifiers(msg),
@@ -197,8 +191,8 @@ impl InputCollector {
         }
     }
 
-    pub fn collect_input(&self) -> RawInput {
-        let events = std::mem::take(&mut *self.events.lock());
+    pub fn collect_input(&mut self) -> RawInput {
+        let events = std::mem::take(&mut self.events);
 
         RawInput {
             screen_rect: Some(self.get_screen_rect()),

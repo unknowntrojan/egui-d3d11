@@ -27,7 +27,7 @@ extern "stdcall" fn DllMain(hinst: usize, reason: u32) -> i32 {
     1
 }
 
-static mut APP: Option<DirectX11App<i32>> = None;
+static mut APP: DirectX11App<i32> = DirectX11App::new();
 static mut OLD_WND_PROC: Option<WNDPROC> = None;
 
 type FnPresent = unsafe extern "stdcall" fn(IDXGISwapChain, u32, u32) -> HRESULT;
@@ -42,8 +42,10 @@ unsafe extern "stdcall" fn hk_present(
     sync_interval: u32,
     flags: u32,
 ) -> HRESULT {
-    if APP.is_none() {
-        APP = Some(DirectX11App::new_with_default(ui, &swap_chain));
+    static INIT: Once = Once::new();
+
+    INIT.call_once(|| {
+        APP.init_default(&swap_chain, ui);
 
         let desc = swap_chain.GetDesc().unwrap();
         if desc.OutputWindow.0 == -1 {
@@ -55,11 +57,9 @@ unsafe extern "stdcall" fn hk_present(
             GWLP_WNDPROC,
             hk_wnd_proc as usize as _,
         )));
-    }
+    });
 
-    APP.as_ref()
-        .unwrap()
-        .present(&swap_chain, sync_interval, flags);
+    APP.present(&swap_chain);
 
     O_PRESENT.as_ref().unwrap()(swap_chain, sync_interval, flags)
 }
@@ -74,7 +74,7 @@ unsafe extern "stdcall" fn hk_resize_buffers(
 ) -> HRESULT {
     eprintln!("Resizing buffers");
 
-    APP.as_ref().unwrap().resize_buffers(&swap_chain, || {
+    APP.resize_buffers(&swap_chain, || {
         O_RESIZE_BUFFERS.as_ref().unwrap()(
             swap_chain.clone(),
             buffer_count,
@@ -92,7 +92,7 @@ unsafe extern "stdcall" fn hk_wnd_proc(
     wparam: WPARAM,
     lparam: LPARAM,
 ) -> LRESULT {
-    APP.as_ref().unwrap().wnd_proc(msg, wparam, lparam);
+    APP.wnd_proc(msg, wparam, lparam);
 
     CallWindowProcW(OLD_WND_PROC.unwrap(), hwnd, msg, wparam, lparam)
 }

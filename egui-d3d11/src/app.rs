@@ -1,6 +1,7 @@
 use egui::{epaint::Primitive, Context};
-use parking_lot::{Mutex, MutexGuard};
-use std::{intrinsics::copy_nonoverlapping, mem::size_of};
+use once_cell::sync::OnceCell;
+use parking_lot::{const_mutex, Mutex, MutexGuard};
+use std::{intrinsics::copy_nonoverlapping, mem::size_of, ops::DerefMut};
 use windows::{
     core::HRESULT,
     Win32::{
@@ -41,36 +42,26 @@ use crate::{
     texture::TextureAllocator,
 };
 
+struct AppData<T> {
+    render_view: Option<ID3D11RenderTargetView>,
+    ui: Box<dyn FnMut(&Context, &mut T) + 'static>,
+    tex_alloc: TextureAllocator,
+    input_layout: ID3D11InputLayout,
+    input_collector: InputCollector,
+    shaders: CompiledShaders,
+    backup: BackupState,
+    ctx: Context,
+    state: T,
+}
+
 /// Heart and soul of this integration.
 /// Main methods you are going to use are:
 /// * [`Self::present`] - Should be called inside of hook or before present.
 /// * [`Self::resize_buffers`] - Should be called **INSTEAD** of swapchain's `ResizeBuffers`.
 /// * [`Self::wnd_proc`] - Should be called on each `WndProc`.
 pub struct DirectX11App<T = ()> {
-    render_view: Mutex<Option<ID3D11RenderTargetView>>,
-    ui: Box<dyn FnMut(&Context, &mut T) + 'static>,
-    tex_alloc: Mutex<TextureAllocator>,
-    input_layout: ID3D11InputLayout,
-    input_collector: InputCollector,
-    shaders: CompiledShaders,
-    ctx: Mutex<Context>,
-    backup: BackupState,
-    state: Mutex<T>,
-    hwnd: HWND,
-}
-
-impl<T> DirectX11App<T>
-where
-    T: Default,
-{
-    /// Creates new app with state set to default value.
-    #[inline]
-    pub fn new_with_default(
-        ui: impl FnMut(&Context, &mut T) + 'static,
-        swap_chain: &IDXGISwapChain,
-    ) -> Self {
-        Self::new_with_state(ui, swap_chain, T::default())
-    }
+    data: Mutex<Option<AppData<T>>>,
+    hwnd: OnceCell<HWND>,
 }
 
 impl<T> DirectX11App<T> {
@@ -106,55 +97,51 @@ impl<T> DirectX11App<T> {
 }
 
 impl<T> DirectX11App<T> {
-    /// Returns lock to state of the app.
-    pub fn state(&self) -> MutexGuard<T> {
-        self.state.lock()
+    /// Creates new [`DirectX11App`] in const context. You are supposed to create a single static item to store the application state.
+    pub const fn new() -> Self {
+        Self {
+            data: const_mutex(None),
+            hwnd: OnceCell::new(),
+        }
     }
 
-    /// Creates new app with state initialized from closule call.
-    #[inline]
-    pub fn new_with(
-        ui: impl FnMut(&Context, &mut T) + 'static,
-        swap_chain: &IDXGISwapChain,
-        state: impl FnOnce() -> T,
-    ) -> Self {
-        Self::new_with_state(ui, swap_chain, state())
+    /// Checks if the app is ready to draw and if it's safe to invoke `present`, `wndproc`, etc.
+    /// `true` means that you have already called an `init_*` on the application.
+    pub fn is_ready(&self) -> bool {
+        self.hwnd.get().is_some()
     }
 
-    /// Creates new app with explicit state value.
-    pub fn new_with_state(
+    /// Initializes application and state. You should call this only once!
+    pub fn init_with_state_context(
+        &self,
+        swap: &IDXGISwapChain,
         ui: impl FnMut(&Context, &mut T) + 'static,
-        swap_chain: &IDXGISwapChain,
         state: T,
-    ) -> Self {
+        context: Context,
+    ) {
         unsafe {
-            let hwnd =
-                expect!(swap_chain.GetDesc(), "Failed to get swapchain's descriptor").OutputWindow;
-
-            if hwnd.0 == -1 {
-                if !cfg!(feature = "no-msgs") {
-                    panic!("Invalid output window descriptor");
-                } else {
-                    unreachable!()
-                }
+            if self.hwnd.get().is_some() {
+                panic_msg!("You must call init only once");
             }
 
-            let device: ID3D11Device =
-                expect!(swap_chain.GetDevice(), "Failed to get swapchain's device");
+            let hwnd = expect!(swap.GetDesc(), "Failed to get swapchain's descriptor").OutputWindow;
+            if hwnd.0 == -1 {
+                panic_msg!("Invalid output window descriptor");
+            }
+            let _ = self.hwnd.set(hwnd);
 
-            let backbuffer: ID3D11Texture2D = expect!(
-                swap_chain.GetBuffer(0),
-                "Failed to get swapchain's backbuffer"
-            );
+            let dev: ID3D11Device = expect!(swap.GetDevice(), "Failed to get swapchain's device");
 
-            let render_view = Mutex::new(Some(expect!(
-                device.CreateRenderTargetView(backbuffer, 0 as _),
-                "Failed to create render target view"
-            )));
+            let backbuffer: ID3D11Texture2D =
+                expect!(swap.GetBuffer(0), "Failed to get swapchain's backbuffer");
+            let render_view = Some(expect!(
+                dev.CreateRenderTargetView(backbuffer, 0 as _),
+                "Failed to create new render target view"
+            ));
 
-            let shaders = CompiledShaders::new(&device);
+            let shaders = CompiledShaders::new(&dev);
             let input_layout = expect!(
-                device.CreateInputLayout(
+                dev.CreateInputLayout(
                     Self::INPUT_ELEMENTS_DESC.as_ptr() as _,
                     Self::INPUT_ELEMENTS_DESC.len() as _,
                     shaders.bytecode_ptr() as _,
@@ -163,49 +150,86 @@ impl<T> DirectX11App<T> {
                 "Failed to create input layout"
             );
 
-            Self {
-                tex_alloc: Mutex::new(TextureAllocator::default()),
+            *self.data.lock() = Some(AppData {
                 input_collector: InputCollector::new(hwnd),
-                ctx: Mutex::new(Context::default()),
+                tex_alloc: TextureAllocator::default(),
                 backup: BackupState::default(),
-                state: Mutex::new(state),
                 ui: Box::new(ui),
+                ctx: context,
                 input_layout,
                 render_view,
                 shaders,
-                hwnd,
-            }
+                state,
+            });
         }
     }
 
+    /// Initializes application and state. Sets egui's context to default value. You should call this only once!
+    #[inline]
+    pub fn init_with_state(
+        &self,
+        swap: &IDXGISwapChain,
+        ui: impl FnMut(&Context, &mut T) + 'static,
+        state: T,
+    ) {
+        self.init_with_state_context(swap, ui, state, Context::default())
+    }
+
+    /// Initializes application and state while allowing you to mutate the initial state of the egui's context. You should call this only once!
+    #[inline]
+    pub fn init_with_mutate(
+        &self,
+        swap: &IDXGISwapChain,
+        ui: impl FnMut(&Context, &mut T) + 'static,
+        mut state: T,
+        mutate: impl FnOnce(&mut Context, &mut T),
+    ) {
+        let mut ctx = Context::default();
+        mutate(&mut ctx, &mut state);
+
+        self.init_with_state_context(swap, ui, state, ctx);
+    }
+
+    fn lock_data<'a>(&'a self) -> impl DerefMut<Target = AppData<T>> + 'a {
+        MutexGuard::map(self.data.lock(), |app| {
+            expect!(app.as_mut(), "You need to call init first")
+        })
+    }
+}
+
+impl<T: Default> DirectX11App<T> {
+    /// Initializes application and sets the state to its default value. You should call this only once!
+    #[inline]
+    pub fn init_default(&self, swap: &IDXGISwapChain, ui: impl FnMut(&Context, &mut T) + 'static) {
+        self.init_with_state_context(swap, ui, T::default(), Context::default());
+    }
+}
+
+impl<T> DirectX11App<T> {
     /// Present call. Should be called once per original present call, before or inside of hook.
     #[allow(clippy::cast_ref_to_mut)]
-    pub fn present(&self, swap_chain: &IDXGISwapChain, _sync_interval: u32, _flags: u32) {
+    pub fn present(&self, swap_chain: &IDXGISwapChain) {
         unsafe {
+            let this = &mut *self.lock_data();
+
             let (dev, ctx) = &get_device_and_context(swap_chain);
 
-            self.backup.save(ctx);
-
-            let view_lock = &*self.render_view.lock();
-            let state_lock = &mut *self.state.lock();
-            let ctx_lock = &mut *self.ctx.lock();
-            let tex_lock = &mut *self.tex_alloc.lock();
+            this.backup.save(ctx);
 
             let screen = self.get_screen_size();
 
             if cfg!(feature = "clear") {
-                ctx.ClearRenderTargetView(view_lock, [0.39, 0.58, 0.92, 1.].as_ptr());
+                ctx.ClearRenderTargetView(&this.render_view, [0.39, 0.58, 0.92, 1.].as_ptr());
             }
 
-            let output = ctx_lock.run(self.input_collector.collect_input(), |ctx| {
+            let output = this.ctx.run(this.input_collector.collect_input(), |ctx| {
                 // Dont look here, it should be fine until someone tries to do something horrible.
-                (*(self.ui.as_ref() as *const _ as *mut dyn FnMut(&Context, &mut T)))(
-                    ctx, state_lock,
-                )
+                (this.ui)(ctx, &mut this.state);
             });
 
             if !output.textures_delta.is_empty() {
-                tex_lock.process_deltas(dev, ctx, output.textures_delta);
+                this.tex_alloc
+                    .process_deltas(dev, ctx, output.textures_delta);
             }
 
             if !output.platform_output.copied_text.is_empty() {
@@ -237,11 +261,12 @@ impl<T> DirectX11App<T> {
             }
 
             if output.shapes.is_empty() {
-                self.backup.restore(ctx);
+                this.backup.restore(ctx);
                 return;
             }
 
-            let primitives = ctx_lock
+            let primitives = this
+                .ctx
                 .tessellate(output.shapes)
                 .into_iter()
                 .filter_map(|prim| {
@@ -258,15 +283,15 @@ impl<T> DirectX11App<T> {
             self.set_sampler_state(dev, ctx);
 
             ctx.RSSetViewports(1, &self.get_viewport() as _);
-            ctx.OMSetRenderTargets(1, view_lock, None);
+            ctx.OMSetRenderTargets(1, &this.render_view, None);
             ctx.IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-            ctx.IASetInputLayout(&self.input_layout);
+            ctx.IASetInputLayout(&this.input_layout);
 
             for mesh in primitives {
                 let idx = create_index_buffer(dev, &mesh);
                 let vtx = create_vertex_buffer(dev, &mesh);
 
-                let texture = tex_lock.get_by_id(mesh.texture_id);
+                let texture = this.tex_alloc.get_by_id(mesh.texture_id);
 
                 ctx.RSSetScissorRects(
                     1,
@@ -284,13 +309,13 @@ impl<T> DirectX11App<T> {
 
                 ctx.IASetVertexBuffers(0, 1, &Some(vtx), &(size_of::<GpuVertex>() as _), &0);
                 ctx.IASetIndexBuffer(idx, DXGI_FORMAT_R32_UINT, 0);
-                ctx.VSSetShader(&self.shaders.vertex, &None, 0);
-                ctx.PSSetShader(&self.shaders.pixel, &None, 0);
+                ctx.VSSetShader(&this.shaders.vertex, &None, 0);
+                ctx.PSSetShader(&this.shaders.pixel, &None, 0);
 
                 ctx.DrawIndexed(mesh.indices.len() as _, 0, 0);
             }
 
-            self.backup.restore(ctx);
+            this.backup.restore(ctx);
         }
     }
 
@@ -304,9 +329,9 @@ impl<T> DirectX11App<T> {
         original: impl FnOnce() -> HRESULT,
     ) -> HRESULT {
         unsafe {
-            let view_lock = &mut *self.render_view.lock();
-            std::ptr::drop_in_place(view_lock);
-
+            let this = &mut *self.lock_data();
+            drop(this.render_view.take());
+            
             let result = original();
 
             let backbuffer: ID3D11Texture2D = expect!(
@@ -322,7 +347,7 @@ impl<T> DirectX11App<T> {
                 "Failed to create render target view"
             );
 
-            *view_lock = Some(new_view);
+            this.render_view = Some(new_view);
             result
         }
     }
@@ -332,7 +357,9 @@ impl<T> DirectX11App<T> {
     /// `false` otherwise.
     #[inline]
     pub fn wnd_proc(&self, umsg: u32, wparam: WPARAM, lparam: LPARAM) -> InputResult {
-        self.input_collector.process(umsg, wparam.0, lparam.0)
+        self.lock_data()
+            .input_collector
+            .process(umsg, wparam.0, lparam.0)
     }
 }
 
@@ -341,7 +368,10 @@ impl<T> DirectX11App<T> {
     fn get_screen_size(&self) -> (f32, f32) {
         let mut rect = RECT::default();
         unsafe {
-            GetClientRect(self.hwnd, &mut rect);
+            GetClientRect(
+                expect!(self.hwnd.get(), "You need to call init first"),
+                &mut rect,
+            );
         }
         (
             (rect.right - rect.left) as f32,

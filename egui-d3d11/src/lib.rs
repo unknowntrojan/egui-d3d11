@@ -9,6 +9,16 @@ macro_rules! expect {
     };
 }
 
+macro_rules! panic_msg {
+    ($($t:tt)*) => {
+        if cfg!(feature = "no-msgs") {
+            unimplemented!()
+        } else {
+            panic!($($t)*)
+        }
+    };
+}
+
 /// Creates zero terminated string.
 macro_rules! p_str {
     ($cstr:expr) => {
