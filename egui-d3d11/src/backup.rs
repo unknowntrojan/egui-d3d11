@@ -52,23 +52,22 @@ struct InnerState {
     depth_stencil_state: Option<ID3D11DepthStencilState>,
     stencil_ref: u32,
 
-    pixel_shader_resource: Option<ID3D11ShaderResourceView>,
-
-    sampler: Option<ID3D11SamplerState>,
+    pixel_shader_resources: Array<ID3D11ShaderResourceView>,
+    samplers: Array<ID3D11SamplerState>,
 
     vertex_shader: Option<ID3D11VertexShader>,
-    vertex_shader_instances: ClassInstances,
+    vertex_shader_instances: Array<ID3D11ClassInstance>,
     vertex_shader_instances_count: u32,
 
     geometry_shader: Option<ID3D11GeometryShader>,
-    geometry_shader_instances: ClassInstances,
+    geometry_shader_instances: Array<ID3D11ClassInstance>,
     geomentry_shader_instances_count: u32,
 
     pixel_shader: Option<ID3D11PixelShader>,
-    pixel_shader_instances: ClassInstances,
+    pixel_shader_instances: Array<ID3D11ClassInstance>,
     pixel_shader_instances_count: u32,
 
-    constant_buffer: Option<ID3D11Buffer>,
+    constant_buffers: Array<ID3D11Buffer>,
     primitive_topology: D3D_PRIMITIVE_TOPOLOGY,
 
     index_buffer: Option<ID3D11Buffer>,
@@ -94,8 +93,8 @@ impl InnerState {
             &mut self.blend_mask,
         );
         ctx.OMGetDepthStencilState(&mut self.depth_stencil_state, &mut self.stencil_ref);
-        ctx.PSGetShaderResources(0, 1, &mut self.pixel_shader_resource);
-        ctx.PSGetSamplers(0, 1, &mut self.sampler);
+        ctx.PSGetShaderResources(0, self.pixel_shader_resources.as_mut_slice());
+        ctx.PSGetSamplers(0, self.samplers.as_mut_slice());
         self.pixel_shader_instances_count = 256;
         self.vertex_shader_instances_count = 256;
         self.geomentry_shader_instances_count = 256;
@@ -116,7 +115,7 @@ impl InnerState {
             &mut self.geomentry_shader_instances_count,
         );
 
-        ctx.VSGetConstantBuffers(0, 1, &mut self.constant_buffer);
+        ctx.VSGetConstantBuffers(0, self.constant_buffers.as_mut_slice());
         ctx.IAGetPrimitiveTopology(&mut self.primitive_topology);
         ctx.IAGetIndexBuffer(
             &mut self.index_buffer,
@@ -135,8 +134,8 @@ impl InnerState {
 
     #[inline]
     pub unsafe fn restore(&mut self, ctx: &ID3D11DeviceContext) {
-        ctx.RSSetScissorRects(self.scissor_count, self.scissor_rects.as_ptr());
-        ctx.RSSetViewports(self.viewport_count, self.viewports.as_ptr());
+        ctx.RSSetScissorRects(self.scissor_rects.as_slice());
+        ctx.RSSetViewports(self.viewports.as_slice());
         ctx.RSSetState(self.raster_state.take());
         ctx.OMSetBlendState(
             self.blend_state.take(),
@@ -144,30 +143,27 @@ impl InnerState {
             self.blend_mask,
         );
         ctx.OMSetDepthStencilState(self.depth_stencil_state.take(), self.stencil_ref);
-        ctx.PSSetShaderResources(0, 1, &self.pixel_shader_resource.take());
-        ctx.PSSetSamplers(0, 1, &self.sampler.take());
+        ctx.PSSetShaderResources(0, self.pixel_shader_resources.as_slice());
+        ctx.PSSetSamplers(0, self.samplers.as_slice());
         ctx.PSSetShader(
             self.pixel_shader.take(),
-            self.pixel_shader_instances.as_ptr(),
-            self.pixel_shader_instances_count,
+            self.pixel_shader_instances.as_slice(),
         );
         self.pixel_shader_instances.release();
 
         ctx.VSSetShader(
             self.vertex_shader.take(),
-            self.vertex_shader_instances.as_ptr(),
-            self.vertex_shader_instances_count,
+            self.vertex_shader_instances.as_slice(),
         );
         self.vertex_shader_instances.release();
 
         ctx.GSSetShader(
             self.geometry_shader.take(),
-            self.geometry_shader_instances.as_ptr(),
-            self.geomentry_shader_instances_count,
+            self.geometry_shader_instances.as_slice(),
         );
         self.geometry_shader_instances.release();
 
-        ctx.VSSetConstantBuffers(0, 1, &self.constant_buffer);
+        ctx.VSSetConstantBuffers(0, self.constant_buffers.as_slice());
         ctx.IASetPrimitiveTopology(self.primitive_topology);
         ctx.IASetIndexBuffer(
             self.index_buffer.take(),
@@ -185,17 +181,21 @@ impl InnerState {
     }
 }
 
-struct ClassInstances([Option<ID3D11ClassInstance>; 256]);
-
-impl ClassInstances {
+struct Array<T>([Option<T>; 16]);
+impl<T> Array<T> {
     #[inline]
-    pub fn as_ptr(&self) -> *const Option<ID3D11ClassInstance> {
-        &self.0[0]
+    pub fn as_mut_ptr(&mut self) -> *mut Option<T> {
+        &mut self.0[0]
     }
 
     #[inline]
-    pub fn as_mut_ptr(&mut self) -> *mut Option<ID3D11ClassInstance> {
-        &mut self.0[0]
+    pub fn as_slice(&self) -> &[Option<T>] {
+        self.0.as_slice()
+    }
+
+    #[inline]
+    pub fn as_mut_slice(&mut self) -> &mut [Option<T>] {
+        self.0.as_mut_slice()
     }
 
     #[inline]
@@ -204,7 +204,7 @@ impl ClassInstances {
     }
 }
 
-impl Default for ClassInstances {
+impl<T> Default for Array<T> {
     fn default() -> Self {
         unsafe { zeroed() }
     }

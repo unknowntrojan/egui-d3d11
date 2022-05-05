@@ -301,7 +301,7 @@ fn get_key(wparam: usize) -> Option<Key> {
 fn get_clipboard_text() -> Option<String> {
     unsafe {
         if OpenClipboard(HWND::default()).as_bool() {
-            let txt = GetClipboardData(CF_TEXT.0).0 as *const i8;
+            let txt = GetClipboardData(CF_TEXT.0).ok()?.0 as *const i8;
             if !txt.is_null() {
                 let data = Some(CStr::from_ptr(txt).to_str().ok()?.to_string());
                 CloseClipboard();

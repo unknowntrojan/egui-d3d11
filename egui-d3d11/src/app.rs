@@ -67,7 +67,7 @@ pub struct DirectX11App<T = ()> {
 impl<T> DirectX11App<T> {
     const INPUT_ELEMENTS_DESC: [D3D11_INPUT_ELEMENT_DESC; 3] = [
         D3D11_INPUT_ELEMENT_DESC {
-            SemanticName: p_str!("POSITION"),
+            SemanticName: pc_str!("POSITION"),
             SemanticIndex: 0,
             Format: DXGI_FORMAT_R32G32_FLOAT,
             InputSlot: 0,
@@ -76,7 +76,7 @@ impl<T> DirectX11App<T> {
             InstanceDataStepRate: 0,
         },
         D3D11_INPUT_ELEMENT_DESC {
-            SemanticName: p_str!("TEXCOORD"),
+            SemanticName: pc_str!("TEXCOORD"),
             SemanticIndex: 0,
             Format: DXGI_FORMAT_R32G32_FLOAT,
             InputSlot: 0,
@@ -85,7 +85,7 @@ impl<T> DirectX11App<T> {
             InstanceDataStepRate: 0,
         },
         D3D11_INPUT_ELEMENT_DESC {
-            SemanticName: p_str!("COLOR"),
+            SemanticName: pc_str!("COLOR"),
             SemanticIndex: 0,
             Format: DXGI_FORMAT_R32G32B32A32_FLOAT,
             InputSlot: 0,
@@ -142,10 +142,8 @@ impl<T> DirectX11App<T> {
             let shaders = CompiledShaders::new(&dev);
             let input_layout = expect!(
                 dev.CreateInputLayout(
-                    Self::INPUT_ELEMENTS_DESC.as_ptr() as _,
-                    Self::INPUT_ELEMENTS_DESC.len() as _,
-                    shaders.bytecode_ptr() as _,
-                    shaders.bytecode_len()
+                    &Self::INPUT_ELEMENTS_DESC,
+                    shaders.bytecode()
                 ),
                 "Failed to create input layout"
             );
@@ -244,7 +242,7 @@ impl<T> DirectX11App<T> {
                 GlobalUnlock(hglob);
                 OpenClipboard(swap_chain.GetDesc().unwrap().OutputWindow);
                 EmptyClipboard();
-                SetClipboardData(CF_UNICODETEXT.0, HANDLE(hglob));
+                let _ = SetClipboardData(CF_UNICODETEXT.0, HANDLE(hglob));
                 GlobalFree(hglob);
                 CloseClipboard();
 
@@ -255,7 +253,7 @@ impl<T> DirectX11App<T> {
                 copy_nonoverlapping(text_utf16.as_ptr(), dst as _, text_utf16.len());
                 GlobalUnlock(hglob);
                 OpenClipboard(HWND::default());
-                SetClipboardData(CF_UNICODETEXT.0, HANDLE(hglob));
+                let _ = SetClipboardData(CF_UNICODETEXT.0, HANDLE(hglob));
                 GlobalFree(hglob);
                 CloseClipboard();
             }
@@ -282,8 +280,8 @@ impl<T> DirectX11App<T> {
             self.set_raster_options(dev, ctx);
             self.set_sampler_state(dev, ctx);
 
-            ctx.RSSetViewports(1, &self.get_viewport() as _);
-            ctx.OMSetRenderTargets(1, &this.render_view, None);
+            ctx.RSSetViewports(&[self.get_viewport()]);
+            ctx.OMSetRenderTargets(&[this.render_view.clone()], None);
             ctx.IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
             ctx.IASetInputLayout(&this.input_layout);
 
@@ -294,23 +292,22 @@ impl<T> DirectX11App<T> {
                 let texture = this.tex_alloc.get_by_id(mesh.texture_id);
 
                 ctx.RSSetScissorRects(
-                    1,
-                    &RECT {
+                    &[RECT {
                         left: mesh.clip.left() as _,
                         top: mesh.clip.top() as _,
                         right: mesh.clip.right() as _,
                         bottom: mesh.clip.bottom() as _,
-                    },
+                    }],
                 );
 
                 if texture.is_some() {
-                    ctx.PSSetShaderResources(0, 1, &texture);
+                    ctx.PSSetShaderResources(0, &[texture]);
                 }
 
                 ctx.IASetVertexBuffers(0, 1, &Some(vtx), &(size_of::<GpuVertex>() as _), &0);
                 ctx.IASetIndexBuffer(idx, DXGI_FORMAT_R32_UINT, 0);
-                ctx.VSSetShader(&this.shaders.vertex, &None, 0);
-                ctx.PSSetShader(&this.shaders.pixel, &None, 0);
+                ctx.VSSetShader(&this.shaders.vertex, &[]);
+                ctx.PSSetShader(&this.shaders.pixel, &[]);
 
                 ctx.DrawIndexed(mesh.indices.len() as _, 0, 0);
             }
@@ -457,7 +454,7 @@ impl<T> DirectX11App<T> {
 
         unsafe {
             let sampler = expect!(dev.CreateSamplerState(&desc), "Failed to create sampler");
-            ctx.PSSetSamplers(0, 1, &Some(sampler));
+            ctx.PSSetSamplers(0, &[Some(sampler)]);
         }
     }
 }
