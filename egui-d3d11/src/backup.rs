@@ -8,7 +8,7 @@ use windows::Win32::{
             ID3D11DeviceContext, ID3D11GeometryShader, ID3D11InputLayout, ID3D11PixelShader,
             ID3D11RasterizerState, ID3D11SamplerState, ID3D11ShaderResourceView,
             ID3D11VertexShader, D3D11_VIEWPORT,
-            D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE,
+            D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE, D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT, D3D11_COMMONSHADER_INPUT_RESOURCE_SLOT_COUNT, D3D11_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT,
         },
         Dxgi::Common::DXGI_FORMAT,
     },
@@ -52,22 +52,22 @@ struct InnerState {
     depth_stencil_state: Option<ID3D11DepthStencilState>,
     stencil_ref: u32,
 
-    pixel_shader_resources: Array<ID3D11ShaderResourceView>,
-    samplers: Array<ID3D11SamplerState>,
+    pixel_shader_resources: Array<{(D3D11_COMMONSHADER_INPUT_RESOURCE_SLOT_COUNT - 1) as usize}, ID3D11ShaderResourceView>,
+    samplers: Array<{(D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT - 1) as usize}, ID3D11SamplerState>,
 
     vertex_shader: Option<ID3D11VertexShader>,
-    vertex_shader_instances: Array<ID3D11ClassInstance>,
+    vertex_shader_instances: Array<256, ID3D11ClassInstance>,
     vertex_shader_instances_count: u32,
 
     geometry_shader: Option<ID3D11GeometryShader>,
-    geometry_shader_instances: Array<ID3D11ClassInstance>,
+    geometry_shader_instances: Array<256, ID3D11ClassInstance>,
     geomentry_shader_instances_count: u32,
 
     pixel_shader: Option<ID3D11PixelShader>,
-    pixel_shader_instances: Array<ID3D11ClassInstance>,
+    pixel_shader_instances: Array<256, ID3D11ClassInstance>,
     pixel_shader_instances_count: u32,
 
-    constant_buffers: Array<ID3D11Buffer>,
+    constant_buffers: Array<{(D3D11_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT - 1) as usize}, ID3D11Buffer>,
     primitive_topology: D3D_PRIMITIVE_TOPOLOGY,
 
     index_buffer: Option<ID3D11Buffer>,
@@ -134,8 +134,8 @@ impl InnerState {
 
     #[inline]
     pub unsafe fn restore(&mut self, ctx: &ID3D11DeviceContext) {
-        ctx.RSSetScissorRects(self.scissor_rects.as_slice());
-        ctx.RSSetViewports(self.viewports.as_slice());
+        ctx.RSSetScissorRects(&self.scissor_rects.as_slice()[..self.scissor_count as usize]);
+        ctx.RSSetViewports(&self.viewports.as_slice()[..self.viewport_count as usize]);
         ctx.RSSetState(self.raster_state.take());
         ctx.OMSetBlendState(
             self.blend_state.take(),
@@ -147,19 +147,19 @@ impl InnerState {
         ctx.PSSetSamplers(0, self.samplers.as_slice());
         ctx.PSSetShader(
             self.pixel_shader.take(),
-            self.pixel_shader_instances.as_slice(),
+            &self.pixel_shader_instances.as_slice()[..self.pixel_shader_instances_count as usize],
         );
         self.pixel_shader_instances.release();
 
         ctx.VSSetShader(
             self.vertex_shader.take(),
-            self.vertex_shader_instances.as_slice(),
+            &self.vertex_shader_instances.as_slice()[..self.vertex_shader_instances_count as usize],
         );
         self.vertex_shader_instances.release();
 
         ctx.GSSetShader(
             self.geometry_shader.take(),
-            self.geometry_shader_instances.as_slice(),
+            &self.geometry_shader_instances.as_slice()[..self.geomentry_shader_instances_count as usize],
         );
         self.geometry_shader_instances.release();
 
@@ -181,8 +181,8 @@ impl InnerState {
     }
 }
 
-struct Array<T>([Option<T>; 16]);
-impl<T> Array<T> {
+struct Array<const N: usize, T>([Option<T>; N]);
+impl<const N: usize, T> Array<N, T> {
     #[inline]
     pub fn as_mut_ptr(&mut self) -> *mut Option<T> {
         &mut self.0[0]
@@ -204,7 +204,7 @@ impl<T> Array<T> {
     }
 }
 
-impl<T> Default for Array<T> {
+impl<const N: usize, T> Default for Array<N, T> {
     fn default() -> Self {
         unsafe { zeroed() }
     }
