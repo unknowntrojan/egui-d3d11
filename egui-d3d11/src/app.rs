@@ -190,7 +190,7 @@ impl<T> DirectX11App<T> {
         self.init_with_state_context(swap, ui, state, ctx);
     }
 
-    fn lock_data<'a>(&'a self) -> impl DerefMut<Target = AppData<T>> + 'a {
+    fn lock_data(&self) -> impl DerefMut<Target = AppData<T>> + '_ {
         MutexGuard::map(self.data.lock(), |app| {
             expect!(app.as_mut(), "You need to call init first")
         })

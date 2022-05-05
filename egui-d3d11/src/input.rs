@@ -309,6 +309,6 @@ fn get_clipboard_text() -> Option<String> {
             }
         }
 
-        return None;
+        None
     }
 }
