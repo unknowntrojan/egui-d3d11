@@ -1,14 +1,10 @@
 #![allow(dead_code)]
 
+use clipboard::{windows_clipboard::WindowsClipboardContext, ClipboardProvider};
 use egui::{Event, Key, Modifiers, PointerButton, Pos2, RawInput, Rect, Vec2};
-use std::ffi::CStr;
 use windows::Win32::{
     Foundation::{HWND, RECT},
-    System::{
-        DataExchange::{CloseClipboard, GetClipboardData, OpenClipboard},
-        SystemServices::CF_TEXT,
-        WindowsProgramming::NtQuerySystemTime,
-    },
+    System::WindowsProgramming::NtQuerySystemTime,
     UI::{
         Input::KeyboardAndMouse::{
             GetAsyncKeyState, VIRTUAL_KEY, VK_BACK, VK_CONTROL, VK_DELETE, VK_DOWN, VK_END,
@@ -299,16 +295,5 @@ fn get_key(wparam: usize) -> Option<Key> {
 }
 
 fn get_clipboard_text() -> Option<String> {
-    unsafe {
-        if OpenClipboard(HWND::default()).as_bool() {
-            let txt = GetClipboardData(CF_TEXT.0).ok()?.0 as *const i8;
-            if !txt.is_null() {
-                let data = Some(CStr::from_ptr(txt).to_str().ok()?.to_string());
-                CloseClipboard();
-                return data;
-            }
-        }
-
-        None
-    }
+    WindowsClipboardContext.get_contents().ok()
 }

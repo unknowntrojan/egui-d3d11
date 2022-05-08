@@ -139,7 +139,9 @@ impl CompiledShaders {
     pub fn bytecode(&self) -> &[u8] {
         match &self.cache {
             ShaderData::EmbeddedData(arr) => *arr,
-            ShaderData::CompiledBlob(blob) => unsafe { from_raw_parts(blob.GetBufferPointer() as _, blob.GetBufferSize()) },
+            ShaderData::CompiledBlob(blob) => unsafe {
+                from_raw_parts(blob.GetBufferPointer() as _, blob.GetBufferSize())
+            },
         }
     }
 

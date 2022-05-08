@@ -7,8 +7,9 @@ use windows::Win32::{
             ID3D11BlendState, ID3D11Buffer, ID3D11ClassInstance, ID3D11DepthStencilState,
             ID3D11DeviceContext, ID3D11GeometryShader, ID3D11InputLayout, ID3D11PixelShader,
             ID3D11RasterizerState, ID3D11SamplerState, ID3D11ShaderResourceView,
-            ID3D11VertexShader, D3D11_VIEWPORT,
-            D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE, D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT, D3D11_COMMONSHADER_INPUT_RESOURCE_SLOT_COUNT, D3D11_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT,
+            ID3D11VertexShader, D3D11_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT,
+            D3D11_COMMONSHADER_INPUT_RESOURCE_SLOT_COUNT, D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT,
+            D3D11_VIEWPORT, D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE,
         },
         Dxgi::Common::DXGI_FORMAT,
     },
@@ -52,8 +53,11 @@ struct InnerState {
     depth_stencil_state: Option<ID3D11DepthStencilState>,
     stencil_ref: u32,
 
-    pixel_shader_resources: Array<{(D3D11_COMMONSHADER_INPUT_RESOURCE_SLOT_COUNT - 1) as usize}, ID3D11ShaderResourceView>,
-    samplers: Array<{(D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT - 1) as usize}, ID3D11SamplerState>,
+    pixel_shader_resources: Array<
+        { (D3D11_COMMONSHADER_INPUT_RESOURCE_SLOT_COUNT - 1) as usize },
+        ID3D11ShaderResourceView,
+    >,
+    samplers: Array<{ (D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT - 1) as usize }, ID3D11SamplerState>,
 
     vertex_shader: Option<ID3D11VertexShader>,
     vertex_shader_instances: Array<256, ID3D11ClassInstance>,
@@ -67,7 +71,8 @@ struct InnerState {
     pixel_shader_instances: Array<256, ID3D11ClassInstance>,
     pixel_shader_instances_count: u32,
 
-    constant_buffers: Array<{(D3D11_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT - 1) as usize}, ID3D11Buffer>,
+    constant_buffers:
+        Array<{ (D3D11_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT - 1) as usize }, ID3D11Buffer>,
     primitive_topology: D3D_PRIMITIVE_TOPOLOGY,
 
     index_buffer: Option<ID3D11Buffer>,
@@ -159,7 +164,8 @@ impl InnerState {
 
         ctx.GSSetShader(
             self.geometry_shader.take(),
-            &self.geometry_shader_instances.as_slice()[..self.geomentry_shader_instances_count as usize],
+            &self.geometry_shader_instances.as_slice()
+                [..self.geomentry_shader_instances_count as usize],
         );
         self.geometry_shader_instances.release();
 

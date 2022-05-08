@@ -1,11 +1,19 @@
+use crate::{
+    backup::BackupState,
+    input::{InputCollector, InputResult},
+    mesh::{create_index_buffer, create_vertex_buffer, GpuMesh, GpuVertex},
+    shader::CompiledShaders,
+    texture::TextureAllocator,
+};
+use clipboard::{windows_clipboard::WindowsClipboardContext, ClipboardProvider};
 use egui::{epaint::Primitive, Context};
 use once_cell::sync::OnceCell;
 use parking_lot::{const_mutex, Mutex, MutexGuard};
-use std::{intrinsics::copy_nonoverlapping, mem::size_of, ops::DerefMut};
+use std::{mem::size_of, ops::DerefMut};
 use windows::{
     core::HRESULT,
     Win32::{
-        Foundation::{HANDLE, HWND, LPARAM, RECT, WPARAM},
+        Foundation::{HWND, LPARAM, RECT, WPARAM},
         Graphics::{
             Direct3D::D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
             Direct3D11::{
@@ -25,21 +33,8 @@ use windows::{
                 IDXGISwapChain,
             },
         },
-        System::{
-            DataExchange::{CloseClipboard, EmptyClipboard, OpenClipboard, SetClipboardData},
-            Memory::{GlobalAlloc, GlobalFree, GlobalLock, GlobalUnlock, GMEM_MOVEABLE},
-            SystemServices::CF_UNICODETEXT,
-        },
         UI::WindowsAndMessaging::GetClientRect,
     },
-};
-
-use crate::{
-    backup::BackupState,
-    input::{InputCollector, InputResult},
-    mesh::{create_index_buffer, create_vertex_buffer, GpuMesh, GpuVertex},
-    shader::CompiledShaders,
-    texture::TextureAllocator,
 };
 
 struct AppData<T> {
@@ -141,10 +136,7 @@ impl<T> DirectX11App<T> {
 
             let shaders = CompiledShaders::new(&dev);
             let input_layout = expect!(
-                dev.CreateInputLayout(
-                    &Self::INPUT_ELEMENTS_DESC,
-                    shaders.bytecode()
-                ),
+                dev.CreateInputLayout(&Self::INPUT_ELEMENTS_DESC, shaders.bytecode()),
                 "Failed to create input layout"
             );
 
@@ -231,31 +223,7 @@ impl<T> DirectX11App<T> {
             }
 
             if !output.platform_output.copied_text.is_empty() {
-                let text_utf16: Vec<u16> = format!("{}\x00", &output.platform_output.copied_text)
-                    .encode_utf16()
-                    .collect();
-
-                let hglob =
-                    GlobalAlloc(GMEM_MOVEABLE, text_utf16.len() * std::mem::size_of::<u16>());
-                let dst = GlobalLock(hglob);
-                copy_nonoverlapping(text_utf16.as_ptr(), dst as _, text_utf16.len());
-                GlobalUnlock(hglob);
-                OpenClipboard(swap_chain.GetDesc().unwrap().OutputWindow);
-                EmptyClipboard();
-                let _ = SetClipboardData(CF_UNICODETEXT.0, HANDLE(hglob));
-                GlobalFree(hglob);
-                CloseClipboard();
-
-                // Lmao please stop
-                let hglob =
-                    GlobalAlloc(GMEM_MOVEABLE, text_utf16.len() * std::mem::size_of::<u16>());
-                let dst = GlobalLock(hglob);
-                copy_nonoverlapping(text_utf16.as_ptr(), dst as _, text_utf16.len());
-                GlobalUnlock(hglob);
-                OpenClipboard(HWND::default());
-                let _ = SetClipboardData(CF_UNICODETEXT.0, HANDLE(hglob));
-                GlobalFree(hglob);
-                CloseClipboard();
+                let _ = WindowsClipboardContext.set_contents(output.platform_output.copied_text);
             }
 
             if output.shapes.is_empty() {
@@ -291,14 +259,12 @@ impl<T> DirectX11App<T> {
 
                 let texture = this.tex_alloc.get_by_id(mesh.texture_id);
 
-                ctx.RSSetScissorRects(
-                    &[RECT {
-                        left: mesh.clip.left() as _,
-                        top: mesh.clip.top() as _,
-                        right: mesh.clip.right() as _,
-                        bottom: mesh.clip.bottom() as _,
-                    }],
-                );
+                ctx.RSSetScissorRects(&[RECT {
+                    left: mesh.clip.left() as _,
+                    top: mesh.clip.top() as _,
+                    right: mesh.clip.right() as _,
+                    bottom: mesh.clip.bottom() as _,
+                }]);
 
                 if texture.is_some() {
                     ctx.PSSetShaderResources(0, &[texture]);
@@ -328,7 +294,7 @@ impl<T> DirectX11App<T> {
         unsafe {
             let this = &mut *self.lock_data();
             drop(this.render_view.take());
-            
+
             let result = original();
 
             let backbuffer: ID3D11Texture2D = expect!(
