@@ -159,17 +159,21 @@ impl InputCollector {
                         if let Some(clipboard) = get_clipboard_text() {
                             self.events.push(Event::Text(clipboard));
                         }
-                    } else if key == Key::C && mods.ctrl {
-                        self.events.push(Event::Copy);
-                    } else if key == Key::X && mods.ctrl {
-                        self.events.push(Event::Cut);
-                    } else {
-                        self.events.push(Event::Key {
-                            key,
-                            pressed: true,
-                            modifiers: get_key_modifiers(msg),
-                        });
                     }
+                    
+                    if key == Key::C && mods.ctrl {
+                        self.events.push(Event::Copy);
+                    }
+
+                    if key == Key::X && mods.ctrl {
+                        self.events.push(Event::Cut);
+                    }
+
+                    self.events.push(Event::Key {
+                        key,
+                        pressed: true,
+                        modifiers: get_key_modifiers(msg),
+                    });
                 }
                 InputResult::Key
             }
