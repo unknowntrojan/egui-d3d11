@@ -1,7 +1,7 @@
 #![allow(warnings)]
 use egui::{
     Align2, Color32, Context, FontData, FontDefinitions, FontFamily, FontId, FontTweak, Pos2, Rect,
-    RichText, ScrollArea, Slider, Stroke, TextureId, Vec2, Widget,
+    RichText, ScrollArea, Slider, Stroke, TextureId, Vec2, Widget, Modifiers, Key,
 };
 use egui_d3d11::DirectX11App;
 use faithe::{internal::alloc_console, pattern::Pattern};
@@ -147,6 +147,13 @@ fn ui(ctx: &Context, i: &mut i32) {
             ui.separator();
 
             ui.label(RichText::new(format!("I: {}", *i)).color(Color32::LIGHT_RED));
+            
+            let mods = ui.input().modifiers;
+            ui.label(format!("Ctrl: {} Shift: {} Alt: {}", mods.ctrl, mods.shift, mods.alt));
+
+            if ui.input().modifiers.matches(Modifiers::CTRL) && ui.input().key_pressed(Key::R) {
+                println!("Pressed");
+            }
 
             unsafe {
                 ui.checkbox(&mut UI_CHECK, "Some checkbox");

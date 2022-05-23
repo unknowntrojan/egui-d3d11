@@ -23,6 +23,7 @@ use windows::Win32::{
 pub struct InputCollector {
     hwnd: HWND,
     events: Vec<Event>,
+    modifiers: Option<Modifiers>,
 }
 
 /// High-level overview of recognized `WndProc` messages.
@@ -56,6 +57,7 @@ impl InputCollector {
         Self {
             hwnd,
             events: vec![],
+            modifiers: None,
         }
     }
 
@@ -66,56 +68,74 @@ impl InputCollector {
                 InputResult::MouseMove
             }
             WM_LBUTTONDOWN | WM_LBUTTONDBLCLK => {
+                let modifiers = get_mouse_modifiers(wparam);
+                self.modifiers = Some(modifiers);
+
                 self.events.push(Event::PointerButton {
                     pos: get_pos(lparam),
                     button: PointerButton::Primary,
                     pressed: true,
-                    modifiers: get_modifiers(wparam),
+                    modifiers,
                 });
                 InputResult::MouseLeft
             }
             WM_LBUTTONUP => {
+                let modifiers = get_mouse_modifiers(wparam);
+                self.modifiers = Some(modifiers);
+
                 self.events.push(Event::PointerButton {
                     pos: get_pos(lparam),
                     button: PointerButton::Primary,
                     pressed: false,
-                    modifiers: get_modifiers(wparam),
+                    modifiers,
                 });
                 InputResult::MouseLeft
             }
             WM_RBUTTONDOWN | WM_RBUTTONDBLCLK => {
+                let modifiers = get_mouse_modifiers(wparam);
+                self.modifiers = Some(modifiers);
+
                 self.events.push(Event::PointerButton {
                     pos: get_pos(lparam),
                     button: PointerButton::Secondary,
                     pressed: true,
-                    modifiers: get_modifiers(wparam),
+                    modifiers
                 });
                 InputResult::MouseRight
             }
             WM_RBUTTONUP => {
+                let modifiers = get_mouse_modifiers(wparam);
+                self.modifiers = Some(modifiers);
+
                 self.events.push(Event::PointerButton {
                     pos: get_pos(lparam),
                     button: PointerButton::Secondary,
                     pressed: false,
-                    modifiers: get_modifiers(wparam),
+                    modifiers
                 });
                 InputResult::MouseRight
             }
             WM_MBUTTONDOWN | WM_MBUTTONDBLCLK => {
+                let modifiers = get_mouse_modifiers(wparam);
+                self.modifiers = Some(modifiers);
+
                 self.events.push(Event::PointerButton {
                     pos: get_pos(lparam),
                     button: PointerButton::Middle,
                     pressed: true,
-                    modifiers: get_modifiers(wparam),
+                    modifiers
                 });
                 InputResult::MouseMiddle
             }
             WM_MBUTTONUP => {
+                let modifiers = get_mouse_modifiers(wparam);
+                self.modifiers = Some(modifiers);
+
                 self.events.push(Event::PointerButton {
                     pos: get_pos(lparam),
                     button: PointerButton::Middle,
                     pressed: false,
-                    modifiers: get_modifiers(wparam),
+                    modifiers
                 });
                 InputResult::MouseMiddle
             }
@@ -152,37 +172,41 @@ impl InputCollector {
                 }
             }
             msg @ (WM_KEYDOWN | WM_SYSKEYDOWN) => {
-                if let Some(key) = get_key(wparam) {
-                    let mods = get_key_modifiers(msg);
+                let modifiers = get_key_modifiers(msg);
+                self.modifiers = Some(modifiers);
 
-                    if key == Key::V && mods.ctrl {
+                if let Some(key) = get_key(wparam) {
+                    if key == Key::V && modifiers.ctrl {
                         if let Some(clipboard) = get_clipboard_text() {
                             self.events.push(Event::Text(clipboard));
                         }
                     }
                     
-                    if key == Key::C && mods.ctrl {
+                    if key == Key::C && modifiers.ctrl {
                         self.events.push(Event::Copy);
                     }
 
-                    if key == Key::X && mods.ctrl {
+                    if key == Key::X && modifiers.ctrl {
                         self.events.push(Event::Cut);
                     }
 
                     self.events.push(Event::Key {
-                        key,
                         pressed: true,
-                        modifiers: get_key_modifiers(msg),
+                        modifiers,
+                        key,
                     });
                 }
                 InputResult::Key
             }
             msg @ (WM_KEYUP | WM_SYSKEYUP) => {
+                let modifiers = get_key_modifiers(msg);
+                self.modifiers = Some(modifiers);
+
                 if let Some(key) = get_key(wparam) {
                     self.events.push(Event::Key {
-                        key,
                         pressed: false,
-                        modifiers: get_key_modifiers(msg),
+                        modifiers,
+                        key,
                     });
                 }
                 InputResult::Key
@@ -192,18 +216,16 @@ impl InputCollector {
     }
 
     pub fn collect_input(&mut self) -> RawInput {
-        let events = std::mem::take(&mut self.events);
-
         RawInput {
+            modifiers: self.modifiers.take().unwrap_or_default(),
+            events: std::mem::take(&mut self.events),
             screen_rect: Some(self.get_screen_rect()),
             time: Some(Self::get_system_time()),
-            modifiers: Modifiers::default(),
             pixels_per_point: Some(1.),
             max_texture_side: None,
             predicted_dt: 1. / 60.,
             hovered_files: vec![],
             dropped_files: vec![],
-            events,
         }
     }
 
@@ -250,7 +272,7 @@ fn get_pos(lparam: isize) -> Pos2 {
     Pos2::new(x, y)
 }
 
-fn get_modifiers(wparam: usize) -> Modifiers {
+fn get_mouse_modifiers(wparam: usize) -> Modifiers {
     Modifiers {
         alt: false,
         ctrl: (wparam & MK_CONTROL as usize) != 0,
