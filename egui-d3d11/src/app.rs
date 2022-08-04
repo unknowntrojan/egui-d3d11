@@ -8,7 +8,6 @@ use crate::{
 use clipboard::{windows_clipboard::WindowsClipboardContext, ClipboardProvider};
 use egui::{epaint::Primitive, Context};
 use once_cell::sync::OnceCell;
-use parking_lot::{const_mutex, Mutex, MutexGuard};
 use std::{mem::size_of, ops::DerefMut};
 use windows::{
     core::HRESULT,
@@ -48,6 +47,11 @@ struct AppData<T> {
     ctx: Context,
     state: T,
 }
+
+#[cfg(not(feature = "spin-lock"))]
+use parking_lot::{Mutex, MutexGuard};
+#[cfg(feature = "spin-lock")]
+use spin::lock_api::{Mutex, MutexGuard};
 
 /// Heart and soul of this integration.
 /// Main methods you are going to use are:
@@ -95,7 +99,7 @@ impl<T> DirectX11App<T> {
     /// Creates new [`DirectX11App`] in const context. You are supposed to create a single static item to store the application state.
     pub const fn new() -> Self {
         Self {
-            data: const_mutex(None),
+            data: Mutex::new(None),
             hwnd: OnceCell::new(),
         }
     }
