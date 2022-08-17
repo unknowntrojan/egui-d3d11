@@ -26,6 +26,12 @@ macro_rules! pc_str {
     };
 }
 
+#[cfg(all(feature = "parking-lot", feature = "spin-lock"))]
+compile_error!("Only one of features `parking-lot`, `spin-lock` must be enabled.");
+
+#[cfg(not(any(feature = "parking-lot", feature = "spin-lock")))]
+compile_error!("One of the features `parking-lot`, `spin-lock` must be enabled.");
+
 mod app;
 pub use app::*;
 

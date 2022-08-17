@@ -203,6 +203,7 @@ version = "0.7.3"
 dependencies = [
  "clipboard",
  "egui",
+ "lock_api",
  "once_cell",
  "parking_lot 0.11.2",
  "spin",

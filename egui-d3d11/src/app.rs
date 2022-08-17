@@ -48,10 +48,12 @@ struct AppData<T> {
     state: T,
 }
 
-#[cfg(not(feature = "spin-lock"))]
+#[cfg(feature = "parking-lot")]
 use parking_lot::{Mutex, MutexGuard};
 #[cfg(feature = "spin-lock")]
 use spin::lock_api::{Mutex, MutexGuard};
+
+use lock_api::MappedMutexGuard;
 
 /// Heart and soul of this integration.
 /// Main methods you are going to use are:
@@ -182,6 +184,16 @@ impl<T> DirectX11App<T> {
         mutate(&mut ctx, &mut state);
 
         self.init_with_state_context(swap, ui, state, ctx);
+    }
+
+    #[cfg(feature = "parking-lot")]
+    pub fn lock_state(&self) -> MappedMutexGuard<'_, parking_lot::RawMutex, T> {
+        MutexGuard::map(self.data.lock(), |app| &mut app.as_mut().unwrap().state)
+    }
+
+    #[cfg(feature = "spin-lock")]
+    pub fn lock_state(&self) -> MappedMutexGuard<'_, spin::mutex::Mutex<()>, T> {
+        MutexGuard::map(self.data.lock(), |app| &mut app.as_mut().unwrap().state)
     }
 
     fn lock_data(&self) -> impl DerefMut<Target = AppData<T>> + '_ {
