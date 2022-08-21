@@ -1,19 +1,13 @@
 # egui-d3d11
 D3D11 backend for egui library. Presumably for mods/cheats development.
-Currently few features from egui are missing. WIP.
-## Latest supported egui version - `0.18.1`
+Currently few features from egui are missing.
+## Latest supported egui version - `0.19`
 
-# Implemented features
-- [x] Text rendering
-- [x] Mesh rendering
-- [x] Mouse input
-- [x] Keyboard input
-- [x] Scroll support
-- [x] Scissor rects clipping
-- [x] State storage
-- [x] Other image textures
+# Missing features
+- [ ] EGui render callbacks
 - [ ] Different cursor icons
 - [ ] Files Drag & Drop support
+- [ ] Alt, Shift, Ctrl keys are kinda glitchy
 
 # Example DLL
 Example dll is contained in `example-wnd` folder. It uses either steam overlay hook or dxgi.

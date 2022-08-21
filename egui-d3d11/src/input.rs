@@ -226,6 +226,7 @@ impl InputCollector {
             predicted_dt: 1. / 60.,
             hovered_files: vec![],
             dropped_files: vec![],
+            has_focus: true,
         }
     }
 

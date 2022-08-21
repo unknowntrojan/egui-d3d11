@@ -11,7 +11,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 faithe = "0.3.1"
-egui = "0.18.1"
+egui = "0.19"
 libc = "0.2.112"
 image = { version = "0.24", features = ["jpeg"] }
 
@@ -21,7 +21,7 @@ features = ["image"]
 
 [dependencies.egui-d3d11]
 path = "../egui-d3d11"
-features = ["force-compile", "save-blob"]
+features = ["force-compile", "save-blob", "parking-lot"]
 
 [dependencies.sunshine]
 git = "https://github.com/sy1ntexx/sunshine"

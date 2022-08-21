@@ -169,23 +169,6 @@ fn ui(ctx: &Context, i: &mut i32) {
                 ui.color_edit_button_rgb(&mut COLOR);
             }
 
-            fn example_plot(ui: &mut egui::Ui) -> egui::Response {
-                use egui::plot::{Line, Value, Values};
-                let n = 128;
-                let line = Line::new(Values::from_values_iter((0..=n).map(|i| {
-                    use std::f64::consts::TAU;
-                    let x = egui::remap(i as f64, 0.0..=n as f64, -TAU..=TAU);
-                    Value::new(x, x.sin())
-                })));
-                egui::plot::Plot::new("example_plot")
-                    .height(64.0)
-                    .data_aspect(1.0)
-                    .show(ui, |plot_ui| plot_ui.line(line))
-                    .response
-            }
-
-            example_plot(ui);
-
             ui.label(format!(
                 "{:?}",
                 &ui.input().pointer.button_down(egui::PointerButton::Primary)
