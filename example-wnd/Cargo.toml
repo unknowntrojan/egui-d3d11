@@ -5,6 +5,7 @@ edition = "2021"
 authors = ["sy1ntexx"]
 description = "Example dll for egui d3d11 showcase."
 license = "MIT"
+publish = false
 
 [lib]
 crate-type = ["cdylib"]
@@ -16,7 +17,7 @@ libc = "0.2.112"
 image = { version = "0.24", features = ["jpeg"] }
 
 [dependencies.egui_extras]
-version = "0.18"
+version = "0.19"
 features = ["image"]
 
 [dependencies.egui-d3d11]
