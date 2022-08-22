@@ -24,7 +24,7 @@ lock_api = "0.4"
 egui = "0.19"
 
 [features]
-default = []
+default = ["parking-lot"]
 # Removes all message prints.
 no-msgs = []
 # Debug feature, enables clearing of the view.
