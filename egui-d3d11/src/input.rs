@@ -266,7 +266,7 @@ impl InputCollector {
 
     pub fn collect_input(&mut self) -> RawInput {
         RawInput {
-            modifiers: self.modifiers.clone().unwrap_or_default(),
+            modifiers: self.modifiers.unwrap_or_default(),
             events: std::mem::take(&mut self.events),
             screen_rect: Some(self.get_screen_rect()),
             time: Some(Self::get_system_time()),

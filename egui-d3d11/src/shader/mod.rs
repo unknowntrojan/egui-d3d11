@@ -26,7 +26,7 @@ impl Shader for ID3D11VertexShader {
         match blob {
             ShaderData::EmbeddedData(arr) => {
                 expect!(
-                    device.CreateVertexShader(*arr, None),
+                    device.CreateVertexShader(arr, None),
                     "Failed to create vertex shader"
                 )
             }
@@ -51,7 +51,7 @@ impl Shader for ID3D11PixelShader {
         match blob {
             ShaderData::EmbeddedData(arr) => {
                 expect!(
-                    device.CreatePixelShader(*arr, None),
+                    device.CreatePixelShader(arr, None),
                     "Failed to create vertex shader"
                 )
             }
@@ -138,7 +138,7 @@ impl CompiledShaders {
 
     pub fn bytecode(&self) -> &[u8] {
         match &self.cache {
-            ShaderData::EmbeddedData(arr) => *arr,
+            ShaderData::EmbeddedData(arr) => arr,
             ShaderData::CompiledBlob(blob) => unsafe {
                 from_raw_parts(blob.GetBufferPointer() as _, blob.GetBufferSize())
             },

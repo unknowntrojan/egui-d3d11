@@ -36,6 +36,7 @@ use windows::{
     },
 };
 
+#[allow(clippy::type_complexity)]
 struct AppData<T> {
     render_view: Option<ID3D11RenderTargetView>,
     ui: Box<dyn FnMut(&Context, &mut T) + 'static>,
