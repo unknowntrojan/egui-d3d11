@@ -7,7 +7,7 @@ Currently few features from egui are missing.
 - [ ] EGui render callbacks
 - [ ] Different cursor icons
 - [ ] Files Drag & Drop support
-- [ ] Alt, Shift, Ctrl keys are kinda glitchy
+- [x] Alt, Shift, Ctrl keys are working fine
 
 # Example DLL
 Example dll is contained in `example-wnd` folder. It uses either steam overlay hook or dxgi.
