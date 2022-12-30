@@ -1,7 +1,7 @@
 # egui-d3d11
 D3D11 backend for egui library. Presumably for mods/cheats development.
 Currently few features from egui are missing.
-## Latest supported egui version - `0.19`
+## Latest supported egui version - `0.20`
 
 # Missing features
 - [ ] EGui render callbacks
