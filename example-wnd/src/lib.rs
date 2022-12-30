@@ -1,7 +1,8 @@
 #![allow(warnings)]
 use egui::{
     Align2, Color32, Context, FontData, FontDefinitions, FontFamily, FontId, FontTweak, Key,
-    Modifiers, Pos2, Rect, RichText, ScrollArea, Slider, Stroke, TextureId, Vec2, Widget,
+    Modifiers, Pos2, Rect, RichText, ScrollArea, Slider, Stroke, TextureId, TextureOptions, Vec2,
+    Widget,
 };
 use egui_d3d11::DirectX11App;
 use faithe::{internal::alloc_console, pattern::Pattern};
@@ -188,22 +189,20 @@ fn ui(ctx: &Context, i: &mut i32) {
             }
         });
 
-        egui::Window::new("Image").show(ctx, |ui| {
-            unsafe {
-                static mut IMG: TextureId = TextureId::Managed(0);
+        egui::Window::new("Image").show(ctx, |ui| unsafe {
+            static mut IMG: TextureId = TextureId::Managed(0);
 
-                if IMG == TextureId::Managed(0) {
-                    let tex = Box::leak(Box::new(ctx.load_texture(
-                        "logo",
-                        egui_extras::image::load_image_bytes(include_bytes!("../../logo.bmp")).unwrap(),
-                        egui::TextureFilter::Linear
-                    )));
+            if IMG == TextureId::Managed(0) {
+                let tex = Box::leak(Box::new(ctx.load_texture(
+                    "logo",
+                    egui_extras::image::load_image_bytes(include_bytes!("../../logo.bmp")).unwrap(),
+                    TextureOptions::LINEAR,
+                )));
 
-                    IMG = tex.id();
-                }
-
-                ui.image(IMG, Vec2::new(500., 391.));
+                IMG = tex.id();
             }
+
+            ui.image(IMG, Vec2::new(500., 391.));
         });
 
         ctx.debug_painter().rect(
