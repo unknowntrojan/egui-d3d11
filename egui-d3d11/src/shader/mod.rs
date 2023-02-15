@@ -23,23 +23,28 @@ impl Shader for ID3D11VertexShader {
     const TARGET: PCSTR = pc_str!("vs_5_0");
 
     unsafe fn create_shader(device: &ID3D11Device, blob: &ShaderData) -> Self {
+        let mut shader: Option<ID3D11VertexShader> = None;
+
         match blob {
             ShaderData::EmbeddedData(arr) => {
                 expect!(
-                    device.CreateVertexShader(arr, None),
+                    device.CreateVertexShader(arr, None, Some(&mut shader)),
                     "Failed to create vertex shader"
-                )
+                );
             }
             ShaderData::CompiledBlob(blob) => {
                 expect!(
                     device.CreateVertexShader(
                         from_raw_parts(blob.GetBufferPointer() as _, blob.GetBufferSize()),
-                        None
+                        None,
+                        Some(&mut shader)
                     ),
                     "Failed to create vertex shader"
-                )
+                );
             }
         }
+
+        expect!(shader, "Failed to create vertex shader")
     }
 }
 
@@ -48,23 +53,28 @@ impl Shader for ID3D11PixelShader {
     const TARGET: PCSTR = pc_str!("ps_5_0");
 
     unsafe fn create_shader(device: &ID3D11Device, blob: &ShaderData) -> Self {
+        let mut shader: Option<ID3D11PixelShader> = None;
+
         match blob {
             ShaderData::EmbeddedData(arr) => {
                 expect!(
-                    device.CreatePixelShader(arr, None),
-                    "Failed to create vertex shader"
+                    device.CreatePixelShader(arr, None, Some(&mut shader)),
+                    "Failed to create pixel shader"
                 )
             }
             ShaderData::CompiledBlob(blob) => {
                 expect!(
                     device.CreatePixelShader(
                         from_raw_parts(blob.GetBufferPointer() as _, blob.GetBufferSize()),
-                        None
+                        None,
+                        Some(&mut shader)
                     ),
-                    "Failed to create vertex shader"
+                    "Failed to create pixel shader"
                 )
             }
         }
+
+        expect!(shader, "Failed to create pixel shader")
     }
 }
 
@@ -161,14 +171,14 @@ impl CompiledShaders {
                 SHADER_TEXT.as_ptr() as _,
                 SHADER_TEXT.len(),
                 None,
-                0 as _,
+                None,
                 None,
                 S::ENTRY,
                 S::TARGET,
                 flags,
                 0,
                 &mut code,
-                &mut error,
+                Some(&mut error),
             )
             .is_err()
             {

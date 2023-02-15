@@ -66,17 +66,18 @@ impl TextureAllocator {
         [nx, ny]: [usize; 2],
     ) -> bool {
         if let Some(old) = self.allocated.get_mut(&tid) {
-            let subr = unsafe {
+            let mut subr = unsafe { std::mem::zeroed() };
+
+            unsafe {
                 expect!(
-                    ctx.Map(&old.texture, 0, D3D11_MAP_WRITE_DISCARD, 0),
+                    ctx.Map(&old.texture, 0, D3D11_MAP_WRITE_DISCARD, 0, Some(&mut subr)),
                     "Failed to map subresource"
-                )
+                );
             }
-            .pData;
 
             match image {
                 ImageData::Font(f) => unsafe {
-                    let data = from_raw_parts_mut(subr as *mut Color32, old.pixels.len());
+                    let data = from_raw_parts_mut(subr.pData as *mut Color32, old.pixels.len());
                     data.as_mut_ptr()
                         .copy_from_nonoverlapping(old.pixels.as_ptr(), old.pixels.len());
 
@@ -143,10 +144,14 @@ impl TextureAllocator {
         };
 
         unsafe {
-            let texture = expect!(
-                dev.CreateTexture2D(&desc, &data),
+            let mut texture: Option<ID3D11Texture2D> = None;
+
+            expect!(
+                dev.CreateTexture2D(&desc, Some(&data), Some(&mut texture)),
                 "Failed to create a texture"
             );
+
+            let texture = expect!(texture, "Failed to create a texture");
 
             let desc = D3D11_SHADER_RESOURCE_VIEW_DESC {
                 Format: DXGI_FORMAT_R8G8B8A8_UNORM,
@@ -159,10 +164,14 @@ impl TextureAllocator {
                 },
             };
 
-            let resource = expect!(
-                dev.CreateShaderResourceView(&texture, &desc),
+            let mut resource: Option<ID3D11ShaderResourceView> = None;
+
+            expect!(
+                dev.CreateShaderResourceView(&texture, Some(&desc), Some(&mut resource)),
                 "Failed to create shader resource view"
             );
+
+            let resource = expect!(resource, "Failed to create shader resource view");
 
             ManagedTexture {
                 width,

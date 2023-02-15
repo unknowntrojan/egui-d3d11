@@ -4,7 +4,10 @@ use clipboard::{windows_clipboard::WindowsClipboardContext, ClipboardProvider};
 use egui::{Event, Key, Modifiers, PointerButton, Pos2, RawInput, Rect, Vec2};
 use windows::Win32::{
     Foundation::{HWND, RECT},
-    System::WindowsProgramming::NtQuerySystemTime,
+    System::{
+        SystemServices::{MK_CONTROL, MK_SHIFT},
+        WindowsProgramming::NtQuerySystemTime,
+    },
     UI::{
         Input::KeyboardAndMouse::{
             GetAsyncKeyState, VIRTUAL_KEY, VK_BACK, VK_CONTROL, VK_DELETE, VK_DOWN, VK_END,
@@ -12,11 +15,11 @@ use windows::Win32::{
             VK_RIGHT, VK_SPACE, VK_TAB, VK_UP,
         },
         WindowsAndMessaging::{
-            GetClientRect, MK_CONTROL, MK_SHIFT, WHEEL_DELTA, WM_CHAR, WM_KEYDOWN, WM_KEYUP,
-            WM_LBUTTONDBLCLK, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MBUTTONDBLCLK, WM_MBUTTONDOWN,
-            WM_MBUTTONUP, WM_MOUSEHWHEEL, WM_MOUSEMOVE, WM_MOUSEWHEEL, WM_RBUTTONDBLCLK,
-            WM_RBUTTONDOWN, WM_RBUTTONUP, WM_SYSKEYDOWN, WM_SYSKEYUP, WM_XBUTTONDBLCLK,
-            WM_XBUTTONDOWN, WM_XBUTTONUP, XBUTTON1, XBUTTON2,
+            GetClientRect, WHEEL_DELTA, WM_CHAR, WM_KEYDOWN, WM_KEYUP, WM_LBUTTONDBLCLK,
+            WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MBUTTONDBLCLK, WM_MBUTTONDOWN, WM_MBUTTONUP,
+            WM_MOUSEHWHEEL, WM_MOUSEMOVE, WM_MOUSEWHEEL, WM_RBUTTONDBLCLK, WM_RBUTTONDOWN,
+            WM_RBUTTONUP, WM_SYSKEYDOWN, WM_SYSKEYUP, WM_XBUTTONDBLCLK, WM_XBUTTONDOWN,
+            WM_XBUTTONUP, XBUTTON1, XBUTTON2,
         },
     },
 };
@@ -148,9 +151,9 @@ impl InputCollector {
 
                 self.events.push(Event::PointerButton {
                     pos: get_pos(lparam),
-                    button: if (wparam as u32) >> 16 & XBUTTON1.0 != 0 {
+                    button: if (wparam as u32) >> 16 & (XBUTTON1 as u32) != 0 {
                         PointerButton::Extra1
-                    } else if (wparam as u32) >> 16 & XBUTTON2.0 != 0 {
+                    } else if (wparam as u32) >> 16 & (XBUTTON2 as u32) != 0 {
                         PointerButton::Extra2
                     } else {
                         unreachable!()
@@ -166,9 +169,9 @@ impl InputCollector {
 
                 self.events.push(Event::PointerButton {
                     pos: get_pos(lparam),
-                    button: if (wparam as u32) >> 16 & XBUTTON1.0 != 0 {
+                    button: if (wparam as u32) >> 16 & (XBUTTON1 as u32) != 0 {
                         PointerButton::Extra1
-                    } else if (wparam as u32) >> 16 & XBUTTON2.0 != 0 {
+                    } else if (wparam as u32) >> 16 & (XBUTTON2 as u32) != 0 {
                         PointerButton::Extra2
                     } else {
                         unreachable!()
@@ -191,7 +194,7 @@ impl InputCollector {
 
                 let delta = (wparam >> 16) as i16 as f32 * 10. / WHEEL_DELTA as f32;
 
-                if wparam & MK_CONTROL as usize != 0 {
+                if wparam & MK_CONTROL.0 as usize != 0 {
                     self.events
                         .push(Event::Zoom(if delta > 0. { 1.5 } else { 0.5 }));
                     InputResult::Zoom
@@ -205,7 +208,7 @@ impl InputCollector {
 
                 let delta = (wparam >> 16) as i16 as f32 * 10. / WHEEL_DELTA as f32;
 
-                if wparam & MK_CONTROL as usize != 0 {
+                if wparam & MK_CONTROL.0 as usize != 0 {
                     self.events
                         .push(Event::Zoom(if delta > 0. { 1.5 } else { 0.5 }));
                     InputResult::Zoom
@@ -237,6 +240,7 @@ impl InputCollector {
                         pressed: true,
                         modifiers,
                         key,
+                        repeat: lparam & 0b1111_1111_1111_1111_0000_0000_0000_0000 > 0,
                     });
                 }
                 InputResult::Key
@@ -250,6 +254,7 @@ impl InputCollector {
                         pressed: false,
                         modifiers,
                         key,
+                        repeat: false,
                     });
                 }
                 InputResult::Key
@@ -325,10 +330,10 @@ fn get_pos(lparam: isize) -> Pos2 {
 fn get_mouse_modifiers(wparam: usize) -> Modifiers {
     Modifiers {
         alt: false,
-        ctrl: (wparam & MK_CONTROL as usize) != 0,
-        shift: (wparam & MK_SHIFT as usize) != 0,
+        ctrl: (wparam & MK_CONTROL.0 as usize) != 0,
+        shift: (wparam & MK_SHIFT.0 as usize) != 0,
         mac_cmd: false,
-        command: (wparam & MK_CONTROL as usize) != 0,
+        command: (wparam & MK_CONTROL.0 as usize) != 0,
     }
 }
 
