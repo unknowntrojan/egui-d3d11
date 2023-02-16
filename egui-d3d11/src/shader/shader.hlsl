@@ -23,5 +23,8 @@ sampler sampler0;
 Texture2D texture0;
 
 float4 ps_main(vs_out input) : SV_TARGET {
-  return pow(input.color, 1.0 / 2.2) * texture0.Sample(sampler0, input.uv);
+  float4 output = pow(input.color, 1.0 / 2.2);
+  // keep the alpha channel intact, we shouldn't gamma correct it
+  output[3] = input.color[3];
+  return output * texture0.Sample(sampler0, input.uv);
 }
