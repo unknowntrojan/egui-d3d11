@@ -61,7 +61,7 @@ pub fn create_vertex_buffer(device: &ID3D11Device, mesh: &GpuMesh) -> ID3D11Buff
     let desc = D3D11_BUFFER_DESC {
         ByteWidth: (mesh.vertices.len() * size_of::<GpuVertex>()) as u32,
         Usage: D3D11_USAGE_DEFAULT,
-        BindFlags: D3D11_BIND_VERTEX_BUFFER.0,
+        BindFlags: D3D11_BIND_VERTEX_BUFFER,
         ..Default::default()
     };
 
@@ -70,19 +70,23 @@ pub fn create_vertex_buffer(device: &ID3D11Device, mesh: &GpuMesh) -> ID3D11Buff
         ..Default::default()
     };
 
+    let mut buffer: Option<ID3D11Buffer> = None;
+
     unsafe {
         expect!(
-            device.CreateBuffer(&desc, &init),
+            device.CreateBuffer(&desc, Some(&init), Some(&mut buffer)),
             "Failed to create vertex buffer"
-        )
+        );
     }
+
+    expect!(buffer, "Failed to create vertex buffer")
 }
 
 pub fn create_index_buffer(device: &ID3D11Device, mesh: &GpuMesh) -> ID3D11Buffer {
     let desc = D3D11_BUFFER_DESC {
         ByteWidth: (mesh.indices.len() * size_of::<u32>()) as u32,
         Usage: D3D11_USAGE_DEFAULT,
-        BindFlags: D3D11_BIND_INDEX_BUFFER.0,
+        BindFlags: D3D11_BIND_INDEX_BUFFER,
         ..Default::default()
     };
 
@@ -91,10 +95,14 @@ pub fn create_index_buffer(device: &ID3D11Device, mesh: &GpuMesh) -> ID3D11Buffe
         ..Default::default()
     };
 
+    let mut buffer: Option<ID3D11Buffer> = None;
+
     unsafe {
         expect!(
-            device.CreateBuffer(&desc, &init),
+            device.CreateBuffer(&desc, Some(&init), Some(&mut buffer)),
             "Failed to create index buffer"
-        )
+        );
     }
+
+    expect!(buffer, "Failed to create vertex buffer")
 }

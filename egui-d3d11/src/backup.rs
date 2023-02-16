@@ -89,101 +89,170 @@ struct InnerState {
 impl InnerState {
     #[inline]
     pub unsafe fn save(&mut self, ctx: &ID3D11DeviceContext) {
-        ctx.RSGetScissorRects(&mut self.scissor_count, self.scissor_rects.as_mut_ptr());
-        ctx.RSGetViewports(&mut self.viewport_count, self.viewports.as_mut_ptr());
-        ctx.RSGetState(&mut self.raster_state);
-        ctx.OMGetBlendState(
-            &mut self.blend_state,
-            self.blend_factor.as_mut_ptr(),
-            &mut self.blend_mask,
+        ctx.RSGetScissorRects(
+            &mut self.scissor_count,
+            Some(self.scissor_rects.as_mut_ptr()),
         );
-        ctx.OMGetDepthStencilState(&mut self.depth_stencil_state, &mut self.stencil_ref);
-        ctx.PSGetShaderResources(0, self.pixel_shader_resources.as_mut_slice());
-        ctx.PSGetSamplers(0, self.samplers.as_mut_slice());
+        ctx.RSGetViewports(&mut self.viewport_count, Some(self.viewports.as_mut_ptr()));
+        self.raster_state = ctx.RSGetState().ok();
+        ctx.OMGetBlendState(
+            Some(&mut self.blend_state),
+            Some(self.blend_factor.as_mut_ptr()),
+            Some(&mut self.blend_mask),
+        );
+        ctx.OMGetDepthStencilState(
+            Some(&mut self.depth_stencil_state),
+            Some(&mut self.stencil_ref),
+        );
+        ctx.PSGetShaderResources(0, Some(self.pixel_shader_resources.as_mut_slice()));
+        ctx.PSGetSamplers(0, Some(self.samplers.as_mut_slice()));
         self.pixel_shader_instances_count = 256;
         self.vertex_shader_instances_count = 256;
         self.geomentry_shader_instances_count = 256;
 
         ctx.PSGetShader(
             &mut self.pixel_shader,
-            self.pixel_shader_instances.as_mut_ptr(),
-            &mut self.pixel_shader_instances_count,
+            Some(self.pixel_shader_instances.as_mut_ptr()),
+            Some(&mut self.pixel_shader_instances_count),
         );
         ctx.VSGetShader(
             &mut self.vertex_shader,
-            self.vertex_shader_instances.as_mut_ptr(),
-            &mut self.vertex_shader_instances_count,
+            Some(self.vertex_shader_instances.as_mut_ptr()),
+            Some(&mut self.vertex_shader_instances_count),
         );
         ctx.GSGetShader(
             &mut self.geometry_shader,
-            self.geometry_shader_instances.as_mut_ptr(),
-            &mut self.geomentry_shader_instances_count,
+            Some(self.geometry_shader_instances.as_mut_ptr()),
+            Some(&mut self.geomentry_shader_instances_count),
         );
 
-        ctx.VSGetConstantBuffers(0, self.constant_buffers.as_mut_slice());
-        ctx.IAGetPrimitiveTopology(&mut self.primitive_topology);
+        ctx.VSGetConstantBuffers(0, Some(self.constant_buffers.as_mut_slice()));
+        self.primitive_topology = ctx.IAGetPrimitiveTopology();
         ctx.IAGetIndexBuffer(
-            &mut self.index_buffer,
-            &mut self.index_buffer_format,
-            &mut self.index_buffer_offest,
+            Some(&mut self.index_buffer),
+            Some(&mut self.index_buffer_format),
+            Some(&mut self.index_buffer_offest),
         );
         ctx.IAGetVertexBuffers(
             0,
             1,
-            &mut self.vertex_buffer,
-            &mut self.vertex_buffer_strides,
-            &mut self.vertex_buffer_offsets,
+            Some(&mut self.vertex_buffer),
+            Some(&mut self.vertex_buffer_strides),
+            Some(&mut self.vertex_buffer_offsets),
         );
-        ctx.IAGetInputLayout(&mut self.input_layout);
+        self.input_layout = ctx.IAGetInputLayout().ok();
     }
 
     #[inline]
     pub unsafe fn restore(&mut self, ctx: &ID3D11DeviceContext) {
-        ctx.RSSetScissorRects(&self.scissor_rects.as_slice()[..self.scissor_count as usize]);
-        ctx.RSSetViewports(&self.viewports.as_slice()[..self.viewport_count as usize]);
-        ctx.RSSetState(self.raster_state.take());
+        ctx.RSSetScissorRects(Some(
+            &self.scissor_rects.as_slice()[..self.scissor_count as usize],
+        ));
+        ctx.RSSetViewports(Some(
+            &self.viewports.as_slice()[..self.viewport_count as usize],
+        ));
+        if let Some(raster_state) = self.raster_state.take() {
+            ctx.RSSetState(&raster_state);
+        }
         ctx.OMSetBlendState(
-            self.blend_state.take(),
-            self.blend_factor.as_ptr(),
+            &expect!(self.blend_state.take(), "Failed to set blend state"),
+            Some(self.blend_factor.as_ptr()),
             self.blend_mask,
         );
-        ctx.OMSetDepthStencilState(self.depth_stencil_state.take(), self.stencil_ref);
-        ctx.PSSetShaderResources(0, self.pixel_shader_resources.as_slice());
-        ctx.PSSetSamplers(0, self.samplers.as_slice());
+        if let Some(depth_stencil_state) = self.depth_stencil_state.take() {
+            ctx.OMSetDepthStencilState(&depth_stencil_state, self.stencil_ref);
+        }
+        // this is really dumb, but I couldn't find a way to make it cleaner
+        // as PSGetShaderResources gives us a &[Option<ID3D11ShaderResourceView>] while
+        // PSSetShaderResources wants a &[ID3D11ShaderResourceView]
+        // there's multiple of these filter maps sadly
+        ctx.PSSetShaderResources(
+            0,
+            Some(
+                &self
+                    .pixel_shader_resources
+                    .0
+                    .iter()
+                    .filter_map(|x| x.clone())
+                    .collect::<Vec<_>>(),
+            ),
+        );
+
+        ctx.PSSetSamplers(
+            0,
+            Some(
+                &self
+                    .samplers
+                    .0
+                    .iter()
+                    .filter_map(|x| x.clone())
+                    .collect::<Vec<_>>(),
+            ),
+        );
         ctx.PSSetShader(
-            self.pixel_shader.take(),
-            &self.pixel_shader_instances.as_slice()[..self.pixel_shader_instances_count as usize],
+            &expect!(self.pixel_shader.take(), "Failed to set pixel shader"),
+            Some(
+                &self
+                    .pixel_shader_instances
+                    .0
+                    .iter()
+                    .filter_map(|x| x.clone())
+                    .collect::<Vec<_>>()[..self.pixel_shader_instances_count as usize],
+            ),
         );
         self.pixel_shader_instances.release();
 
         ctx.VSSetShader(
-            self.vertex_shader.take(),
-            &self.vertex_shader_instances.as_slice()[..self.vertex_shader_instances_count as usize],
+            &expect!(self.vertex_shader.take(), "Failed to set vertex shader"),
+            Some(
+                &self
+                    .vertex_shader_instances
+                    .0
+                    .iter()
+                    .filter_map(|x| x.clone())
+                    .collect::<Vec<_>>()[..self.vertex_shader_instances_count as usize],
+            ),
         );
         self.vertex_shader_instances.release();
 
-        ctx.GSSetShader(
-            self.geometry_shader.take(),
-            &self.geometry_shader_instances.as_slice()
-                [..self.geomentry_shader_instances_count as usize],
-        );
+        if let Some(geo_shader) = &self.geometry_shader.take() {
+            ctx.GSSetShader(
+                geo_shader,
+                Some(
+                    &self.geometry_shader_instances.0
+                        [..self.geomentry_shader_instances_count as usize]
+                        .iter()
+                        .filter_map(|x| x.clone())
+                        .collect::<Vec<_>>(),
+                ),
+            );
+        }
         self.geometry_shader_instances.release();
 
-        ctx.VSSetConstantBuffers(0, self.constant_buffers.as_slice());
+        let constant_buffers = self
+            .constant_buffers
+            .0
+            .iter()
+            .filter_map(|x| x.clone())
+            .collect::<Vec<_>>();
+        ctx.VSSetConstantBuffers(0, Some(&constant_buffers));
         ctx.IASetPrimitiveTopology(self.primitive_topology);
         ctx.IASetIndexBuffer(
-            self.index_buffer.take(),
+            &expect!(self.index_buffer.take(), "Failed to set index buffer"),
             self.index_buffer_format,
             self.index_buffer_offest,
         );
         ctx.IASetVertexBuffers(
             0,
             1,
-            &self.vertex_buffer.take(),
-            &self.vertex_buffer_strides,
-            &self.vertex_buffer_offsets,
+            Some(&self.vertex_buffer.take()),
+            Some(&self.vertex_buffer_strides),
+            Some(&self.vertex_buffer_offsets),
         );
-        ctx.IASetInputLayout(self.input_layout.take());
+
+        if let Some(input_layout) = &self.input_layout.take() {
+            ctx.IASetInputLayout(input_layout);
+        }
     }
 }
 

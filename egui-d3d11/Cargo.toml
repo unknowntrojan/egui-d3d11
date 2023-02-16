@@ -19,9 +19,9 @@ spin = { version = "0.9", optional = true, features = ["lock_api"] }
 parking_lot = { version = "0.12", optional = true }
 clipboard = "0.5"
 thiserror = "1.0"
-once_cell = "1.13"
+once_cell = "1.17"
 lock_api = "0.4"
-egui = "0.20"
+egui = "0.21"
 
 [features]
 default = ["parking-lot"]
@@ -39,7 +39,7 @@ spin-lock = ["dep:spin"]
 parking-lot = ["dep:parking_lot"]
 
 [dependencies.windows]
-version = "0.36"
+version = "0.44"
 features = [
     "Win32_UI_Input_KeyboardAndMouse",
     "Win32_System_WindowsProgramming",

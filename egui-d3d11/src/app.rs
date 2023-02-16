@@ -16,20 +16,20 @@ use windows::{
         Graphics::{
             Direct3D::D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
             Direct3D11::{
-                ID3D11Device, ID3D11DeviceContext, ID3D11InputLayout, ID3D11RenderTargetView,
-                ID3D11Texture2D, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_BLEND_DESC,
-                D3D11_BLEND_INV_SRC_ALPHA, D3D11_BLEND_ONE, D3D11_BLEND_OP_ADD,
-                D3D11_BLEND_SRC_ALPHA, D3D11_COLOR_WRITE_ENABLE_ALL, D3D11_COMPARISON_ALWAYS,
-                D3D11_CULL_NONE, D3D11_FILL_SOLID, D3D11_FILTER_MIN_MAG_MIP_LINEAR,
-                D3D11_INPUT_ELEMENT_DESC, D3D11_INPUT_PER_VERTEX_DATA, D3D11_RASTERIZER_DESC,
-                D3D11_RENDER_TARGET_BLEND_DESC, D3D11_SAMPLER_DESC, D3D11_TEXTURE_ADDRESS_BORDER,
-                D3D11_VIEWPORT,
+                ID3D11BlendState, ID3D11Device, ID3D11DeviceContext, ID3D11InputLayout,
+                ID3D11RasterizerState, ID3D11RenderTargetView, ID3D11SamplerState, ID3D11Texture2D,
+                D3D11_APPEND_ALIGNED_ELEMENT, D3D11_BLEND_DESC, D3D11_BLEND_INV_SRC_ALPHA,
+                D3D11_BLEND_ONE, D3D11_BLEND_OP_ADD, D3D11_BLEND_SRC_ALPHA,
+                D3D11_COLOR_WRITE_ENABLE_ALL, D3D11_COMPARISON_ALWAYS, D3D11_CULL_NONE,
+                D3D11_FILL_SOLID, D3D11_FILTER_MIN_MAG_MIP_LINEAR, D3D11_INPUT_ELEMENT_DESC,
+                D3D11_INPUT_PER_VERTEX_DATA, D3D11_RASTERIZER_DESC, D3D11_RENDER_TARGET_BLEND_DESC,
+                D3D11_SAMPLER_DESC, D3D11_TEXTURE_ADDRESS_BORDER, D3D11_VIEWPORT,
             },
             Dxgi::{
                 Common::{
                     DXGI_FORMAT_R32G32B32A32_FLOAT, DXGI_FORMAT_R32G32_FLOAT, DXGI_FORMAT_R32_UINT,
                 },
-                IDXGISwapChain,
+                IDXGISwapChain, DXGI_SWAP_CHAIN_DESC,
             },
         },
         UI::WindowsAndMessaging::GetClientRect,
@@ -126,7 +126,14 @@ impl<T> DirectX11App<T> {
                 panic_msg!("You must call init only once");
             }
 
-            let hwnd = expect!(swap.GetDesc(), "Failed to get swapchain's descriptor").OutputWindow;
+            let mut swap_desc: DXGI_SWAP_CHAIN_DESC = Default::default();
+
+            expect!(
+                swap.GetDesc(&mut swap_desc),
+                "Failed to get swapchain's descriptor"
+            );
+
+            let hwnd = swap_desc.OutputWindow;
             if hwnd.0 == -1 {
                 panic_msg!("Invalid output window descriptor");
             }
@@ -136,16 +143,29 @@ impl<T> DirectX11App<T> {
 
             let backbuffer: ID3D11Texture2D =
                 expect!(swap.GetBuffer(0), "Failed to get swapchain's backbuffer");
-            let render_view = Some(expect!(
-                dev.CreateRenderTargetView(backbuffer, 0 as _),
+
+            let mut render_view: Option<ID3D11RenderTargetView> = None;
+
+            expect!(
+                dev.CreateRenderTargetView(&backbuffer, None, Some(&mut render_view)),
                 "Failed to create new render target view"
-            ));
+            );
 
             let shaders = CompiledShaders::new(&dev);
-            let input_layout = expect!(
-                dev.CreateInputLayout(&Self::INPUT_ELEMENTS_DESC, shaders.bytecode()),
+
+            let mut input_layout: Option<ID3D11InputLayout> = None;
+
+            expect!(
+                dev.CreateInputLayout(
+                    &Self::INPUT_ELEMENTS_DESC,
+                    shaders.bytecode(),
+                    Some(&mut input_layout)
+                ),
                 "Failed to create input layout"
             );
+
+            // this can only happen if the expect above fails
+            let input_layout = expect!(input_layout, "Failed to create input layout");
 
             *self.data.lock() = Some(AppData {
                 input_collector: InputCollector::new(hwnd),
@@ -226,7 +246,10 @@ impl<T> DirectX11App<T> {
             let screen = self.get_screen_size();
 
             if cfg!(feature = "clear") {
-                ctx.ClearRenderTargetView(&this.render_view, [0.39, 0.58, 0.92, 1.].as_ptr());
+                // Use let_chains here once stabilized, didn't wanna add a nightly feature to the crate
+                if let Some(render_view) = &this.render_view {
+                    ctx.ClearRenderTargetView(render_view, [0.39, 0.58, 0.92, 1.].as_ptr());
+                }
             }
 
             let output = this.ctx.run(this.input_collector.collect_input(), |ctx| {
@@ -265,8 +288,14 @@ impl<T> DirectX11App<T> {
             self.set_raster_options(dev, ctx);
             self.set_sampler_state(dev, ctx);
 
-            ctx.RSSetViewports(&[self.get_viewport()]);
-            ctx.OMSetRenderTargets(&[this.render_view.clone()], None);
+            ctx.RSSetViewports(Some(&[self.get_viewport()]));
+            ctx.OMSetRenderTargets(
+                Some(&[expect!(
+                    this.render_view.clone(),
+                    "Failed to set render targets"
+                )]),
+                None,
+            );
             ctx.IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
             ctx.IASetInputLayout(&this.input_layout);
 
@@ -276,21 +305,27 @@ impl<T> DirectX11App<T> {
 
                 let texture = this.tex_alloc.get_by_id(mesh.texture_id);
 
-                ctx.RSSetScissorRects(&[RECT {
+                ctx.RSSetScissorRects(Some(&[RECT {
                     left: mesh.clip.left() as _,
                     top: mesh.clip.top() as _,
                     right: mesh.clip.right() as _,
                     bottom: mesh.clip.bottom() as _,
-                }]);
+                }]));
 
-                if texture.is_some() {
-                    ctx.PSSetShaderResources(0, &[texture]);
+                if let Some(texture) = texture {
+                    ctx.PSSetShaderResources(0, Some(&[texture]));
                 }
 
-                ctx.IASetVertexBuffers(0, 1, &Some(vtx), &(size_of::<GpuVertex>() as _), &0);
-                ctx.IASetIndexBuffer(idx, DXGI_FORMAT_R32_UINT, 0);
-                ctx.VSSetShader(&this.shaders.vertex, &[]);
-                ctx.PSSetShader(&this.shaders.pixel, &[]);
+                ctx.IASetVertexBuffers(
+                    0,
+                    1,
+                    Some(&Some(vtx)),
+                    Some(&(size_of::<GpuVertex>() as _)),
+                    Some(&0),
+                );
+                ctx.IASetIndexBuffer(&idx, DXGI_FORMAT_R32_UINT, 0);
+                ctx.VSSetShader(&this.shaders.vertex, None);
+                ctx.PSSetShader(&this.shaders.pixel, None);
 
                 ctx.DrawIndexed(mesh.indices.len() as _, 0, 0);
             }
@@ -322,12 +357,14 @@ impl<T> DirectX11App<T> {
             let device: ID3D11Device =
                 expect!(swap_chain.GetDevice(), "Failed to get swapchain's device");
 
-            let new_view = expect!(
-                device.CreateRenderTargetView(backbuffer, 0 as _),
+            let mut new_view: Option<ID3D11RenderTargetView> = None;
+
+            expect!(
+                device.CreateRenderTargetView(&backbuffer, None, Some(&mut new_view)),
                 "Failed to create render target view"
             );
 
-            this.render_view = Some(new_view);
+            this.render_view = new_view;
             result
         }
     }
@@ -349,7 +386,7 @@ impl<T> DirectX11App<T> {
         let mut rect = RECT::default();
         unsafe {
             GetClientRect(
-                expect!(self.hwnd.get(), "You need to call init first"),
+                *expect!(self.hwnd.get(), "You need to call init first"),
                 &mut rect,
             );
         }
@@ -390,11 +427,20 @@ impl<T> DirectX11App<T> {
         };
 
         unsafe {
-            let blend_state = expect!(
-                dev.CreateBlendState(&blend_desc),
+            let mut blend_state: Option<ID3D11BlendState> = None;
+
+            expect!(
+                dev.CreateBlendState(&blend_desc, Some(&mut blend_state)),
                 "Failed to create blend state"
             );
-            ctx.OMSetBlendState(&blend_state, [0., 0., 0., 0.].as_ptr(), 0xffffffff);
+
+            let blend_state = expect!(blend_state, "Failed to create blend state");
+
+            ctx.OMSetBlendState(
+                &blend_state,
+                Some([0f32, 0f32, 0f32, 0f32].as_ptr()),
+                0xffffffff,
+            );
         }
     }
 
@@ -413,11 +459,15 @@ impl<T> DirectX11App<T> {
         };
 
         unsafe {
-            let options = expect!(
-                dev.CreateRasterizerState(&raster_desc),
+            let mut options: Option<ID3D11RasterizerState> = None;
+
+            expect!(
+                dev.CreateRasterizerState(&raster_desc, Some(&mut options)),
                 "Failed to create rasterizer state"
             );
-            ctx.RSSetState(&options);
+            if let Some(options) = options {
+                ctx.RSSetState(&options);
+            }
         }
     }
 
@@ -436,16 +486,24 @@ impl<T> DirectX11App<T> {
         };
 
         unsafe {
-            let sampler = expect!(dev.CreateSamplerState(&desc), "Failed to create sampler");
-            ctx.PSSetSamplers(0, &[Some(sampler)]);
+            let mut sampler: Option<ID3D11SamplerState> = None;
+
+            expect!(
+                dev.CreateSamplerState(&desc, Some(&mut sampler)),
+                "Failed to create sampler"
+            );
+
+            if let Some(sampler) = sampler {
+                ctx.PSSetSamplers(0, Some(&[sampler]));
+            }
         }
     }
 }
 
 unsafe fn get_device_and_context(swap: &IDXGISwapChain) -> (ID3D11Device, ID3D11DeviceContext) {
     let device: ID3D11Device = expect!(swap.GetDevice(), "Failed to get swapchain's device");
-    let mut ctx = None;
-    device.GetImmediateContext(&mut ctx);
+    let ctx = device.GetImmediateContext();
+
     (
         device,
         expect!(ctx, "Failed to get device's immediate context"),

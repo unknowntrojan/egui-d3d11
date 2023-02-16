@@ -11,13 +11,13 @@ publish = false
 crate-type = ["cdylib"]
 
 [dependencies]
-faithe = "0.3.1"
-egui = "0.20"
+faithe = "0.8.0"
+egui = "0.21"
 libc = "0.2.112"
 image = { version = "0.24", features = ["jpeg"] }
 
 [dependencies.egui_extras]
-version = "0.20"
+version = "0.21"
 features = ["image"]
 
 [dependencies.egui-d3d11]
@@ -28,7 +28,7 @@ features = ["force-compile", "save-blob", "parking-lot"]
 git = "https://github.com/sy1ntexx/sunshine"
 
 [dependencies.windows]
-version = "0.36"
+version = "0.44"
 features = [
     "Win32_UI_WindowsAndMessaging",
     "Win32_Graphics_Dxgi_Common",
