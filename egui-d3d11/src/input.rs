@@ -15,7 +15,7 @@ use windows::Win32::{
             VK_RIGHT, VK_SPACE, VK_TAB, VK_UP,
         },
         WindowsAndMessaging::{
-            GetClientRect, WHEEL_DELTA, WM_CHAR, WM_KEYDOWN, WM_KEYUP, WM_LBUTTONDBLCLK,
+            GetClientRect, KF_REPEAT, WHEEL_DELTA, WM_CHAR, WM_KEYDOWN, WM_KEYUP, WM_LBUTTONDBLCLK,
             WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MBUTTONDBLCLK, WM_MBUTTONDOWN, WM_MBUTTONUP,
             WM_MOUSEHWHEEL, WM_MOUSEMOVE, WM_MOUSEWHEEL, WM_RBUTTONDBLCLK, WM_RBUTTONDOWN,
             WM_RBUTTONUP, WM_SYSKEYDOWN, WM_SYSKEYUP, WM_XBUTTONDBLCLK, WM_XBUTTONDOWN,
@@ -240,7 +240,7 @@ impl InputCollector {
                         pressed: true,
                         modifiers,
                         key,
-                        repeat: lparam & 0b1111_1111_1111_1111_0000_0000_0000_0000 > 0,
+                        repeat: lparam & (KF_REPEAT as isize) > 0,
                     });
                 }
                 InputResult::Key
