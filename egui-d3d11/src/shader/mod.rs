@@ -91,7 +91,8 @@ pub struct CompiledShaders {
 
 impl CompiledShaders {
     pub fn new(device: &ID3D11Device) -> Self {
-        if cfg!(feature = "force-compile") {
+        #[cfg(feature = "force-compile")]
+        {
             let (vcache, vertex) = Self::compile_shader::<ID3D11VertexShader>(device);
             let (_pcache, pixel) = Self::compile_shader::<ID3D11PixelShader>(device);
 
@@ -128,7 +129,9 @@ impl CompiledShaders {
                 pixel,
                 cache: ShaderData::CompiledBlob(vcache),
             }
-        } else {
+        }
+        #[cfg(not(feature = "force-compile"))]
+        {
             unsafe {
                 let cache = ShaderData::EmbeddedData(include_bytes!("vertex.bin"));
                 let vertex = ID3D11VertexShader::create_shader(device, &cache);
